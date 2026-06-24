@@ -1,0 +1,108 @@
+# Esquema declarativo — Orden de Compra
+#
+# Define QUÉ campos extraer y CÓMO encontrarlos para este tipo de documento.
+# Agregar un tipo de documento nuevo = crear otro archivo como este, sin tocar
+# código. Basado en el PDF real OC 579-2025 (Industrias Roland Print).
+
+tipo: orden_compra
+nombre_visible: "Orden de Compra"
+version: 1
+
+# Fuentes de extracción, en orden de preferencia. El motor cruza sus resultados:
+# a mayor coincidencia entre fuentes, mayor confianza.
+fuentes:
+  - texto_nativo      # PyMuPDF — si el PDF tiene capa de texto (caso de esta OC)
+  - ocr_tesseract     # fallback / verificación para escaneos o fotos
+
+# ---------------------------------------------------------------------------
+# Campos de cabecera: un valor por documento.
+# `posicion` = dónde está el valor respecto de la etiqueta ancla.
+#   abajo   → línea siguiente (layout etiqueta-arriba / valor-abajo)
+#   derecha → mismo renglón, a la derecha
+# `region` (opcional) acota la búsqueda a un bloque para evitar etiquetas
+#   repetidas (ej. "Tax ID" aparece para empresa y para proveedor).
+# ---------------------------------------------------------------------------
+campos:
+  numero_oc:
+    etiquetas: ["N° OC", "Nº OC", "N OC"]
+    tipo: codigo
+    posicion: abajo
+    obligatorio: true
+    validacion:
+      regex: '^\d{3}-\d{4}$'        # ej. 579-2025
+
+  fecha_emision:
+    etiquetas: ["DATE", "FECHA"]
+    tipo: fecha
+    posicion: abajo
+    formato: "DD/MM/YYYY"
+    obligatorio: true
+
+  proyecto:
+    etiquetas: ["Project:", "Proyecto:"]
+    tipo: texto
+    posicion: abajo
+
+  proveedor:
+    etiquetas: ["Razón Social:", "Razon Social:"]
+    tipo: texto
+    posicion: abajo
+    region: datos_proveedor          # bloque "DATOS DEL PROVEEDOR"
+    validacion:
+      validar_contra: maestro_proveedores   # fuente de verdad interna (opcional)
+
+  terminos_pago:
+    etiquetas: ["Payment Terms:", "Cond. de Pago:", "Términos:"]
+    tipo: texto
+    posicion: derecha
+
+# ---------------------------------------------------------------------------
+# Regiones: bloques de la página para acotar búsquedas de campos.
+# Se delimitan por etiquetas de inicio/fin (no por coordenadas fijas, para
+# tolerar que el layout se corra entre documentos).
+# ---------------------------------------------------------------------------
+regiones:
+  datos_proveedor:
+    desde: "DATOS DEL PROVEEDOR"
+    hasta: "DETAILS"
+
+# ---------------------------------------------------------------------------
+# Detalle: campos de tabla (N filas, una por ítem de la OC).
+# Modelo "1 OC = N líneas de detalle".
+# ---------------------------------------------------------------------------
+detalle:
+  ancla_inicio: "DETAILS"
+  ancla_fin: ["TOTAL", "Forty", "BENEFICIARY"]   # marcadores de fin de tabla
+  columnas:
+    item:          { tipo: entero }
+    sidige_code:   { tipo: codigo, validacion: { validar_contra: maestro_sidige } }
+    customer_code: { tipo: codigo }
+    cantidad:      { tipo: entero }
+    um:            { tipo: texto }
+    descripcion:   { tipo: texto }
+    precio_unit:   { tipo: moneda }
+    precio_total:  { tipo: moneda }
+
+# ---------------------------------------------------------------------------
+# Reglas a nivel documento: validación cruzada entre campos ya extraídos.
+# `severidad`: advertencia (marca pero no bloquea) | error (manda a excepción).
+# ---------------------------------------------------------------------------
+reglas_documento:
+  - nombre: cuadre_total
+    descripcion: "La suma de precios de línea debe coincidir con el total."
+    expresion: "sum(detalle.precio_total) == total"
+    severidad: advertencia
+
+# ---------------------------------------------------------------------------
+# Identidad del documento: campos que lo identifican de forma única.
+# Sirve para la detección de duplicados.
+# ---------------------------------------------------------------------------
+identidad:
+  campos_clave: [numero_oc]
+
+# ---------------------------------------------------------------------------
+# Umbrales de confianza para el semáforo de la UI.
+# ---------------------------------------------------------------------------
+confianza:
+  verde: 90
+  amarillo: 70
