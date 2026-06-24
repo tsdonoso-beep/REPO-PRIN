@@ -54,7 +54,8 @@ campos:
   terminos_pago:
     etiquetas: ["Payment Terms:", "Cond. de Pago:", "Términos:"]
     tipo: texto
-    posicion: derecha
+    posicion: abajo
+    region: datos_proveedor
 
 # ---------------------------------------------------------------------------
 # Regiones: bloques de la página para acotar búsquedas de campos.
@@ -73,15 +74,18 @@ regiones:
 detalle:
   ancla_inicio: "DETAILS"
   ancla_fin: ["TOTAL", "Forty", "BENEFICIARY"]   # marcadores de fin de tabla
+  # El orden de las columnas debe respetar el orden visual izquierda->derecha
+  # de la tabla real, porque el motor las ubica por posición horizontal.
   columnas:
-    item:          { tipo: entero }
-    sidige_code:   { tipo: codigo, validacion: { validar_contra: maestro_sidige } }
-    customer_code: { tipo: codigo }
-    cantidad:      { tipo: entero }
-    um:            { tipo: texto }
-    descripcion:   { tipo: texto }
-    precio_unit:   { tipo: moneda }
-    precio_total:  { tipo: moneda }
+    item:                 { tipo: entero }
+    sidige_code:          { tipo: codigo, validacion: { validar_contra: maestro_sidige } }
+    customer_code:        { tipo: codigo }
+    cantidad:             { tipo: entero }
+    um:                   { tipo: texto }
+    descripcion_proveedor: { tipo: texto }
+    descripcion_proyecto:  { tipo: texto }
+    precio_unit:          { tipo: moneda }
+    precio_total:         { tipo: moneda }
 
 # ---------------------------------------------------------------------------
 # Reglas a nivel documento: validación cruzada entre campos ya extraídos.
