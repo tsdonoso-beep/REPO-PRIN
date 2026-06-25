@@ -1,6 +1,6 @@
 /* REPO PRINT · Service Worker — app del técnico offline.
    Solo cachea el shell del técnico; el resto (panel admin, API Supabase) pasa a red. */
-const CACHE = 'repoprint-v7';
+const CACHE = 'repoprint-v8';
 const SHELL = [
   'tecnico.html', 'css/tecnico.css', 'js/tecnico.js', 'js/config.js',
   'assets/logo.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/icon-maskable-512.png',
