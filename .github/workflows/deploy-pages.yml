@@ -2,7 +2,7 @@ name: Deploy a GitHub Pages
 
 on:
   push:
-    branches: [claude/wizardly-ride-sixjku]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
