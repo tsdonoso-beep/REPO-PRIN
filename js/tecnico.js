@@ -352,11 +352,13 @@
     const cam = el('div', { class: 'cam' });
     cam.innerHTML = `
       <video id="cam-video" autoplay playsinline muted></video>
-      ${nodo.con_mascara ? `<div class="cam-mask" id="cam-mask">
-        <div class="cm-logo"><img src="assets/logo.svg" alt="INROPRIN"></div>
-        <div class="cm-line" id="cm-fecha"></div>
-        <div class="cm-line" id="cm-loc"></div>
-        <div class="cm-node">${esc(nodo.nombre)}</div></div>` : '<div class="cam-doc">Modo documento · sin máscara</div>'}
+      ${nodo.con_mascara ? `
+        <div class="cam-brand">
+          <img class="cb-ic" src="assets/logo.svg" alt="">
+          <div class="cb-tx"><b class="cb-0">Industrias</b><b class="cb-1">Roland Print</b><b class="cb-2">Material Didáctico Manipulable</b></div>
+        </div>
+        <div class="cam-node">${esc(nodo.nombre)}</div>
+        <div class="cam-gps" id="cam-gps"></div>` : '<div class="cam-doc">Modo documento · sin máscara</div>'}
       <div class="cam-bar">
         <button class="cam-thumbs" id="cam-thumbs"></button>
         <button class="shutter" id="shutter"></button>
@@ -366,8 +368,10 @@
     // máscara en vivo
     if (nodo.con_mascara) {
       const loc = locActual();
-      $('#cm-fecha').textContent = '🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      $('#cm-loc').textContent = loc ? `📍 ${loc.direccion} · ${loc.distrito} · ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`;
+      const ls = [new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })];
+      if (loc) { if (loc.direccion) ls.push(loc.direccion); if (loc.distrito) ls.push(loc.distrito); if (loc.provincia) ls.push(loc.provincia); }
+      else ls.push((colegioActual() || {}).nombre || '');
+      $('#cam-gps').innerHTML = ls.map((t, i) => `<span class="${i === 0 ? 'g0' : 'g1'}">${esc(t)}</span>`).join('');
     }
     $('#shutter').addEventListener('click', takeShot);
     $('#btn-review').addEventListener('click', openReview);
@@ -392,51 +396,92 @@
     const rv = $('#btn-review'); rv.disabled = false; rv.textContent = `Revisar (${state.captured.length})`;
   }
 
-  // Pre-load INROPRIN logo so burnMask can draw it synchronously
+  // Logo (diamante) precargado para dibujar el sello de marca de forma síncrona
   const _maskLogo = new Image(); _maskLogo.src = 'assets/logo.svg';
 
-  function burnMask(ctx, w, h) {
-    const pad = Math.round(w * .032);
+  // Caja blanca "Industrias Roland Print" (esquina superior izquierda)
+  function drawBrandBox(ctx, w, x, y) {
+    const padI = Math.max(8, Math.round(w * .015));
+    const fsBig = Math.max(15, Math.round(w * .037));
+    const fsSm = Math.max(9, Math.round(w * .016));
+    const gap = Math.round(w * .014);
+    const lineGap = Math.round(fsSm * .3);
 
-    // === TOP strip: INROPRIN logo ===
-    const topH = Math.round(h * 0.09);
-    const topG = ctx.createLinearGradient(0, 0, 0, topH);
-    topG.addColorStop(0, 'rgba(0,0,0,.72)'); topG.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = topG; ctx.fillRect(0, 0, w, topH);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.font = `800 ${fsBig}px Manrope, Arial, sans-serif`;
+    const wBig = ctx.measureText('Roland Print').width;
+    ctx.font = `600 ${fsSm}px Manrope, Arial, sans-serif`;
+    const wSub = ctx.measureText('Material Didáctico Manipulable').width;
+    const textW = Math.max(wBig, wSub);
+    const textH = fsSm + lineGap + fsBig + lineGap + fsSm;
+    const iconH = Math.round(textH * .96), iconW = iconH;
+    const boxW = padI + iconW + gap + Math.ceil(textW) + padI;
+    const boxH = padI * 2 + textH;
+
+    // Tarjeta blanca redondeada con sombra
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.30)'; ctx.shadowBlur = Math.round(w * .012); ctx.shadowOffsetY = Math.round(w * .004);
+    ctx.fillStyle = '#ffffff';
+    const r = Math.round(w * .014);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + boxW, y, x + boxW, y + boxH, r);
+    ctx.arcTo(x + boxW, y + boxH, x, y + boxH, r); ctx.arcTo(x, y + boxH, x, y, r);
+    ctx.arcTo(x, y, x + boxW, y, r); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Icono (diamante) centrado verticalmente
     if (_maskLogo.complete && _maskLogo.naturalWidth) {
-      const lh = Math.round(topH * .66);
-      ctx.drawImage(_maskLogo, pad, Math.round((topH - lh) / 2), lh, lh);
+      ctx.drawImage(_maskLogo, x + padI, y + Math.round((boxH - iconH) / 2), iconW, iconH);
     }
 
-    // === BOTTOM bar: timestamp · location · node name (3 separate lines) ===
-    const barH = Math.round(h * 0.21);
-    const bg = ctx.createLinearGradient(0, h - barH, 0, h);
-    bg.addColorStop(0, 'rgba(0,0,0,0)'); bg.addColorStop(.28, 'rgba(0,0,0,.50)'); bg.addColorStop(1, 'rgba(0,0,0,.82)');
-    ctx.fillStyle = bg; ctx.fillRect(0, h - barH, w, barH);
+    // Texto
+    const tx = x + padI + iconW + gap, ty = y + padI;
+    ctx.font = `400 ${fsSm}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#2b2f3a';
+    ctx.fillText('Industrias', tx, ty);
+    ctx.font = `800 ${fsBig}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#1c2541';
+    ctx.fillText('Roland Print', tx, ty + fsSm + lineGap);
+    ctx.font = `600 ${fsSm}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#E30815';
+    ctx.fillText('Material Didáctico Manipulable', tx, ty + fsSm + lineGap + fsBig + lineGap);
+    ctx.textBaseline = 'alphabetic';
+  }
 
-    const fs = Math.max(11, Math.round(w * .023));
-    const lnH = Math.round(fs * 1.72);
+  function burnMask(ctx, w, h) {
+    const pad = Math.round(w * .03);
 
-    // Node name — right, top line, light blue tint
-    ctx.textAlign = 'right';
-    ctx.font = `700 ${Math.max(10, Math.round(fs * .88))}px Manrope, sans-serif`;
-    ctx.fillStyle = 'rgba(191,224,245,.95)';
-    ctx.fillText(state.currentNodo.nombre.slice(0, 45), w - pad, h - pad - lnH * 2);
+    // === Caja de marca arriba a la izquierda ===
+    drawBrandBox(ctx, w, pad, pad);
 
-    // Timestamp — left, middle line
-    ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
-    ctx.font = `600 ${fs}px Manrope, sans-serif`;
-    ctx.fillText('🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }), pad, h - pad - lnH);
-
-    // Location — left, bottom line
+    // === Sello GPS abajo a la derecha: fecha + ubicación (líneas separadas) ===
     const loc = locActual();
-    const locText = loc ? `📍 ${loc.direccion}, ${loc.distrito}, ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`;
-    // Truncate if too long to avoid overflow
-    ctx.fillText(locText.slice(0, 70), pad, h - pad);
+    const lines = [];
+    lines.push(new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    if (loc) {
+      if (loc.direccion) lines.push(loc.direccion);
+      if (loc.distrito) lines.push(loc.distrito);
+      if (loc.provincia) lines.push(loc.provincia);
+    } else { lines.push((colegioActual() || {}).nombre || ''); }
 
-    // Accent left stripe
-    ctx.fillStyle = state.accent;
-    ctx.fillRect(0, h - barH, Math.round(w * .012), barH);
+    const fs = Math.max(12, Math.round(w * .024));
+    const lnH = Math.round(fs * 1.32);
+    ctx.save();
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = Math.round(fs * .55);
+    let by = h - pad - (lines.length - 1) * lnH;
+    lines.forEach((t, i) => {
+      ctx.fillStyle = i === 0 ? 'rgba(255,255,255,.96)' : '#fff';
+      ctx.font = `${i === 0 ? 600 : 700} ${i === 0 ? Math.round(fs * .92) : fs}px Manrope, Arial, sans-serif`;
+      ctx.fillText(String(t).slice(0, 48), w - pad, by); by += lnH;
+    });
+    ctx.restore();
+
+    // === Nombre del nodo abajo a la izquierda (contexto de registro) ===
+    ctx.save();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = Math.round(fs * .55);
+    ctx.fillStyle = 'rgba(191,224,245,.97)';
+    ctx.font = `700 ${Math.round(fs * .92)}px Manrope, Arial, sans-serif`;
+    ctx.fillText(state.currentNodo.nombre.slice(0, 40), pad, h - pad);
+    ctx.restore();
   }
 
   // ============================================================

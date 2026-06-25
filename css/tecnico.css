@@ -206,10 +206,22 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 /* ---------- Cámara en vivo ---------- */
 .cam { position: absolute; inset: 58px 0 0 0; background: #000; overflow: hidden; }
 .cam video { width: 100%; height: 100%; object-fit: cover; }
-.cam-mask { position: absolute; left: 0; right: 0; bottom: 118px; padding: 14px 18px; background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; border-left: 4px solid var(--accent); }
-.cam-mask .cm-logo { height: 22px; width: auto; display: block; margin-bottom: 5px; }
-.cam-mask .cm-line { font: 600 12px Manrope; margin-top: 4px; opacity: .95; }
-.cam-mask .cm-node { font: 700 12px Manrope; margin-top: 6px; color: #bfe0f5; }
+/* Caja de marca "Industrias Roland Print" (arriba a la izquierda) */
+.cam-brand { position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 8px;
+  background: #fff; border-radius: 12px; padding: 8px 12px 8px 9px; box-shadow: 0 3px 12px rgba(0,0,0,.28); }
+.cam-brand .cb-ic { width: 38px; height: 38px; flex: 0 0 auto; }
+.cam-brand .cb-tx { display: flex; flex-direction: column; line-height: 1; }
+.cam-brand .cb-0 { font: 400 10px Manrope; color: #2b2f3a; }
+.cam-brand .cb-1 { font: 800 21px Manrope; color: #1c2541; letter-spacing: -.01em; margin: 2px 0 3px; }
+.cam-brand .cb-2 { font: 600 9px Manrope; color: #E30815; }
+/* Nombre del nodo (abajo a la izquierda) */
+.cam-node { position: absolute; left: 14px; bottom: 126px; max-width: 55%; font: 700 12px Manrope; color: #bfe0f5;
+  text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+/* Sello GPS (abajo a la derecha) */
+.cam-gps { position: absolute; right: 14px; bottom: 126px; display: flex; flex-direction: column; align-items: flex-end;
+  text-align: right; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+.cam-gps .g0 { font: 600 12px Manrope; opacity: .96; margin-bottom: 2px; }
+.cam-gps .g1 { font: 700 13px Manrope; }
 .cam-doc { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; font: 700 11px Manrope; padding: 6px 12px; border-radius: 999px; }
 .cam-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 118px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px calc(env(safe-area-inset-bottom)) 24px; }
 .cam-thumbs { width: 52px; height: 52px; border-radius: 12px; background: #222 center/cover no-repeat; border: 2px solid rgba(255,255,255,.5); position: relative; }
