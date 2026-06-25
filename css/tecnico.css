@@ -40,6 +40,29 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 .screen { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
+/* ---------- Nav inferior (Carpetas / Subidas) ---------- */
+.navbar { display: flex; flex-shrink: 0; background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.navb { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 8px; color: var(--muted-2); position: relative; }
+.navb .ni { font-size: 21px; line-height: 1; opacity: .7; }
+.navb .nl { font: 700 11px Manrope; }
+.navb.active { color: var(--accent); }
+.navb.active .ni { opacity: 1; }
+.nav-badge { position: absolute; top: 4px; left: 50%; margin-left: 6px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--red); color: #fff; font: 800 10px Manrope; display: grid; place-items: center; padding: 0 4px; }
+
+/* ---------- Pantalla global de Subidas ---------- */
+.sub-search { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 14px 8px; display: flex; align-items: center; gap: 8px; }
+.sub-search .ss-ic { position: absolute; left: 26px; font-size: 14px; opacity: .55; pointer-events: none; }
+.sub-search input { width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; padding: 0 14px 0 38px; font: 600 14px Manrope; color: var(--ink); }
+.sub-search input:focus { outline: none; border-color: var(--accent); }
+.sub-pills { display: flex; gap: 8px; padding: 2px 14px 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.spill { flex-shrink: 0; height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; border: 1px solid var(--line); color: var(--muted); font: 700 12px Manrope; }
+.spill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sub-list { padding: 0 14px 16px; }
+.sub-summary { display: flex; flex-wrap: wrap; gap: 7px; padding: 4px 0 12px; }
+.sub-group-h { font: 800 12px Manrope; color: var(--muted); letter-spacing: .01em; padding: 14px 2px 8px; position: sticky; top: 64px; background: var(--bg); z-index: 1; }
+.sub-list .frow { margin-bottom: 8px; }
+.sub-path { font: 600 11px Manrope; color: var(--muted-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ============================================================
    LOGIN POR PIN
    ============================================================ */

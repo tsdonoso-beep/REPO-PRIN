@@ -28,7 +28,7 @@
   // Ubicación conocida por colegio (se llena en el Paso 4). { "NOMBRE COLEGIO": {direccion, distrito, provincia} }
   const LOCACIONES = {};
 
-  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', attempts: 0, captured: [], stream: null };
+  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', attempts: 0, captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
 
   // ============================================================
   // INDEXEDDB · cola de subidas
@@ -121,8 +121,31 @@
     return cb;
   }
 
+  // ---- Resolución de rutas (para la pantalla global de Subidas) ----
+  const nodoById = (id) => state.nodos.find((n) => String(n.id) === String(id));
+  function pathOf(nodoId) {
+    const parts = []; let n = nodoById(nodoId), guard = 0;
+    while (n && guard++ < 20) { parts.unshift(n.nombre); n = n.parent_id ? nodoById(n.parent_id) : null; }
+    return parts;
+  }
+
+  // ---- Navegación inferior (Carpetas / Subidas) ----
+  function setNav(visible, tab) {
+    const nv = $('#navbar'); if (!nv) return;
+    nv.classList.toggle('hidden', !visible);
+    if (tab) { state.tab = tab; nv.querySelectorAll('.navb').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab)); }
+  }
+  $('#navbar').addEventListener('click', (e) => {
+    const b = e.target.closest('.navb'); if (!b) return;
+    const tab = b.dataset.tab;
+    if (state.captured.length && !confirm('Tienes fotos sin subir en esta tanda. ¿Salir?')) return;
+    state.captured = []; stopCamera();
+    if (tab === 'subidas') renderSubidas();
+    else { state.currentNodo = null; renderTree(); }
+  });
+
   function renderTree() {
-    state.currentNodo = null; stopCamera();
+    state.currentNodo = null; stopCamera(); setNav(true, 'arbol');
     const parent = state.stack.length ? state.stack[state.stack.length - 1] : null;
     const items = childrenOf(parent ? parent.id : null);
     // ¿Llegamos a un colegio/taller? → pantalla «¿Qué registrarás?»
@@ -210,6 +233,62 @@
     const tag = (card, n) => { const t = $('#screen').querySelector(card + ' .cc-count'); if (t) return; const body = $('#screen').querySelector(card + ' .cc-tags'); if (body && n) body.insertAdjacentHTML('beforeend', `<span class="cc-tag cc-count ok">✓ ${n} en cola/subidas</span>`); };
     tag('.choice-card.reg', nReg); tag('.choice-card.doc', nDoc);
   }
+
+  // ============================================================
+  // PANTALLA GLOBAL · SUBIDAS / COLA (búsqueda + filtros)
+  // ============================================================
+  function renderSubidas() {
+    state.currentNodo = null; stopCamera(); setNav(true, 'subidas');
+    setBar('Subidas', `Técnico · ${state.tecnico.nombre}`, false);
+    const screen = $('#screen'); screen.innerHTML = '';
+    const search = el('div', { class: 'sub-search' });
+    search.innerHTML = `<span class="ss-ic">🔎</span><input id="sub-q" type="search" placeholder="Buscar colegio, grupo o archivo…" value="${esc(state.subQuery)}">`;
+    screen.appendChild(search);
+    const pills = el('div', { class: 'sub-pills' });
+    const defs = [['all', 'Todas'], ['done', '✓ Subidas'], ['queue', '☁ En cola'], ['error', '! Error']];
+    pills.innerHTML = defs.map(([k, l]) => `<button class="spill ${state.subFilter === k ? 'active' : ''}" data-f="${k}">${l}</button>`).join('');
+    screen.appendChild(pills);
+    screen.appendChild(el('div', { class: 'sub-list', id: 'sub-list' }));
+    pills.addEventListener('click', (e) => { const b = e.target.closest('.spill'); if (!b) return; state.subFilter = b.dataset.f; pills.querySelectorAll('.spill').forEach((x) => x.classList.toggle('active', x.dataset.f === state.subFilter)); paintSubList(); });
+    const inp = $('#sub-q'); inp.addEventListener('input', () => { state.subQuery = inp.value; paintSubList(); });
+    paintSubList();
+  }
+  async function paintSubList() {
+    const cont = $('#sub-list'); if (!cont) return;
+    const all = (await idbAll()).sort((a, b) => b.id - a.id);
+    const tot = { done: 0, queue: 0, error: 0 };
+    all.forEach((s) => { if (s.status === 'done') tot.done++; else if (s.status === 'error') tot.error++; else tot.queue++; });
+    const q = state.subQuery.trim().toLowerCase();
+    const passF = (s) => state.subFilter === 'all' || (state.subFilter === 'done' && s.status === 'done') || (state.subFilter === 'error' && s.status === 'error') || (state.subFilter === 'queue' && (s.status === 'pending' || s.status === 'uploading'));
+    const rows = all.map((s) => ({ s, path: pathOf(s.nodo_id) })).filter(({ s, path }) => passF(s) && (!q || (s.filename + ' ' + path.join(' ')).toLowerCase().includes(q)));
+    cont.innerHTML = '';
+    cont.appendChild(el('div', { class: 'sub-summary' },
+      `<span class="chip ok">✓ ${tot.done} subidas</span>` +
+      `<span class="chip pend">☁ ${tot.queue} en cola</span>` +
+      (tot.error ? `<span class="chip err">! ${tot.error} error</span>` : '')));
+    if (rows.length === 0) {
+      cont.appendChild(el('div', { class: 'empty', style: 'padding:48px 24px' }, `<div class="ic">${all.length ? '🔍' : '☁️'}</div><p>${all.length ? 'Nada coincide con tu búsqueda.' : 'Aún no has tomado fotos.<br>Ve a Carpetas para empezar.'}</p>`));
+      return;
+    }
+    const lbl = { pending: 'En cola', uploading: 'Subiendo…', done: 'Subida', error: 'Error — toca para reintentar' };
+    let curGroup = null;
+    rows.forEach(({ s, path }) => {
+      const gk = (path[0] || '') + (path[1] ? ' › ' + path[1] : '');
+      if (gk !== curGroup) { curGroup = gk; cont.appendChild(el('div', { class: 'sub-group-h' }, '🏫 ' + esc(gk || 'Sin ubicación'))); }
+      const hora = new Date(s.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const cola = path.slice(2).join(' › ') || path[path.length - 1] || '';
+      const row = el('div', { class: 'frow' });
+      row.innerHTML = `<img class="fthumb" src="${s.thumb}">
+        <div class="fbody">
+          <div class="fname">${esc(s.filename)}</div>
+          <div class="sub-path">${esc(cola)}</div>
+          <div class="fmeta st-${s.status}">${s.status === 'uploading' ? '<div class="fbar"><i></i></div>' : `${lbl[s.status]} · ${hora}`}</div>
+        </div>
+        <div class="fstat ${s.status}">${s.status === 'done' ? '✓' : s.status === 'error' ? '!' : s.status === 'uploading' ? '↻' : '☁'}</div>`;
+      if (s.status === 'error') { row.style.cursor = 'pointer'; row.addEventListener('click', () => { toast('Reintentando subida…'); flushQueue(); }); }
+      cont.appendChild(row);
+    });
+  }
   $('#btn-back').addEventListener('click', () => {
     if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) return; state.captured = []; }
     stopCamera();
@@ -221,7 +300,7 @@
   // CARPETA DE SUBIDA (vista grupo: chips + lista + Tomar fotos)
   // ============================================================
   async function openFolder(nodo) {
-    state.currentNodo = nodo; stopCamera();
+    state.currentNodo = nodo; stopCamera(); setNav(false);
     setBar(nodo.nombre, rutaActual(), true);
     const screen = $('#screen'); screen.innerHTML = '';
     screen.appendChild(el('div', { class: 'crumb-bar' }, '📍 ' + esc(rutaActual())));
@@ -262,7 +341,7 @@
   // CÁMARA EN VIVO + MÁSCARA EN TIEMPO REAL + RÁFAGA
   // ============================================================
   async function openCamera(nodo) {
-    state.captured = [];
+    state.captured = []; setNav(false);
     setBar(nodo.nombre, 'Cámara', true);
     const screen = $('#screen'); screen.innerHTML = '';
     const cam = el('div', { class: 'cam' });
@@ -329,7 +408,7 @@
   // REVISIÓN (descartar antes de subir)
   // ============================================================
   function openReview() {
-    stopCamera();
+    stopCamera(); setNav(false);
     setBar(`Revisar ${state.captured.length} fotos`, state.currentNodo.nombre, true);
     const screen = $('#screen'); screen.innerHTML = '';
     screen.appendChild(el('div', { class: 'review-hint' }, 'Toca ✕ para descartar una foto antes de subir.'));
@@ -387,6 +466,7 @@
     openConfirm(fotos.length, nombres);
   }
   function openConfirm(n, nombres) {
+    setNav(false);
     setBar('¡Listo!', state.currentNodo.nombre, true);
     const screen = $('#screen'); screen.innerHTML = '';
     const c = el('div', { class: 'confirm' });
@@ -420,15 +500,22 @@
       }
     } finally { _flushing = false; }
   }
-  function refresh() { updateBadge(); if (state.currentNodo && $('#filelist')) renderFolder(); else decorateGroups(); }
+  function refresh() {
+    updateBadge();
+    if (state.tab === 'subidas' && $('#sub-list')) paintSubList();
+    else if (state.currentNodo && $('#filelist')) renderFolder();
+    else decorateGroups();
+  }
   async function updateBadge() {
     const pend = (await idbAll()).filter((r) => r.status !== 'done').length;
     let b = $('#pend-badge');
-    if (!b) { b = el('div', { id: 'pend-badge', class: 'pend-badge', onclick: () => flushQueue() }); $('#tbar').insertBefore(b, $('#btn-logout')); }
+    if (!b) { b = el('div', { id: 'pend-badge', class: 'pend-badge', onclick: () => renderSubidas() }); $('#tbar').insertBefore(b, $('#btn-logout')); }
     if (pend > 0) { b.classList.remove('hidden'); b.innerHTML = `<span class="${navigator.onLine ? 'dot-on' : 'dot-off'}"></span>${pend}`; } else b.classList.add('hidden');
+    const nb = $('#nav-badge');
+    if (nb) { if (pend > 0) { nb.classList.remove('hidden'); nb.textContent = pend; } else nb.classList.add('hidden'); }
   }
   window.addEventListener('online', () => { toast('Conexión restablecida — subiendo…'); flushQueue(); });
-  window.addEventListener('offline', () => { toast('Sin conexión — se guardará en cola', 'info'); updateBadge(); decorateGroups(); });
+  window.addEventListener('offline', () => { toast('Sin conexión — se guardará en cola', 'info'); refresh(); });
   setInterval(() => { if (state.tecnico && navigator.onLine) flushQueue(); }, 30000);
 
   // ============================================================
