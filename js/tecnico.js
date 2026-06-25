@@ -25,9 +25,6 @@
   const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const slugUp = (s) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '').slice(0, 22);
 
-  // Ubicación conocida por colegio (se llena en el Paso 4). { "NOMBRE COLEGIO": {direccion, distrito, provincia} }
-  const LOCACIONES = {};
-
   const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', attempts: 0, captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
 
   // ============================================================
@@ -97,13 +94,18 @@
   // ÁRBOL
   // ============================================================
   async function loadNodos() {
-    const { data } = await sb.from('nodos').select('id,parent_id,nombre,tipo,con_mascara,drive_url,orden').order('orden', { ascending: true });
+    const { data } = await sb.from('nodos').select('id,parent_id,nombre,tipo,con_mascara,drive_url,orden,region,provincia,distrito,direccion').order('orden', { ascending: true });
     if (data) { state.nodos = data; localStorage.setItem('repo_nodos', JSON.stringify(data)); }
     else { const c = localStorage.getItem('repo_nodos'); if (c) state.nodos = JSON.parse(c); }
   }
   const childrenOf = (pid) => state.nodos.filter((n) => n.parent_id === pid).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
   const rutaActual = () => state.stack.map((n) => n.nombre).join(' › ');
   const colegioActual = () => state.stack[1] || state.stack[0] || null;
+  // Ubicación leída desde la BD (nodo del colegio). null si aún no está cargada.
+  function locActual() {
+    const c = colegioActual();
+    return c && c.direccion ? { direccion: c.direccion, distrito: c.distrito, provincia: c.provincia, region: c.region } : null;
+  }
 
   function setBar(title, sub, back) { $('#tbar-title').textContent = title; $('#tbar-sub').textContent = sub || ''; $('#btn-back').classList.toggle('hidden', !back); }
 
@@ -360,7 +362,7 @@
     screen.appendChild(cam);
     // máscara en vivo
     if (nodo.con_mascara) {
-      const loc = LOCACIONES[(colegioActual() || {}).nombre] || null;
+      const loc = locActual();
       $('#cm-fecha').textContent = '🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       $('#cm-loc').textContent = loc ? `📍 ${loc.direccion} · ${loc.distrito} · ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`;
     }
@@ -397,8 +399,8 @@
     ctx.font = `800 ${Math.round(fs * 1.1)}px Manrope, sans-serif`; ctx.fillText('REPO PRINT', pad, h - pad - fs * 3.1);
     ctx.font = `600 ${fs}px Manrope, sans-serif`;
     ctx.fillText('🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }), pad, h - pad - fs * 1.9);
-    const loc = LOCACIONES[(colegioActual() || {}).nombre] || null;
-    ctx.fillText(loc ? `📍 ${loc.direccion}, ${loc.distrito}` : `📍 ${(colegioActual() || {}).nombre || ''}`, pad, h - pad - fs * .7);
+    const loc = locActual();
+    ctx.fillText(loc ? `📍 ${loc.direccion}, ${loc.distrito}, ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`, pad, h - pad - fs * .7);
     ctx.textAlign = 'right'; ctx.font = `700 ${Math.round(fs * .9)}px Manrope, sans-serif`; ctx.fillStyle = 'rgba(255,255,255,.9)';
     ctx.fillText(state.currentNodo.nombre.slice(0, 40), w - pad, h - pad - fs * .7); ctx.textAlign = 'left';
     ctx.fillStyle = state.accent; ctx.fillRect(0, h - barH, Math.round(w * .012), barH);
@@ -453,7 +455,7 @@
     const nombres = [];
     for (let i = 0; i < fotos.length; i++) {
       const filename = nomenclatura(base + i + 1); nombres.push(filename);
-      const loc = LOCACIONES[(colegioActual() || {}).nombre] || null;
+      const loc = locActual();
       const thumb = await downscale(fotos[i]);
       await idbAdd({
         tecnico_id: state.tecnico.id, nodo_id: state.currentNodo.id, filename,
