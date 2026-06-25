@@ -1,9 +1,9 @@
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Roland Print">
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="INROPRIN">
   <g transform="translate(60 60)">
-    <rect x="-46" y="-92" width="46" height="46" rx="6" transform="rotate(45 -23 -69)" fill="#ffffff" stroke="#006eb1" stroke-width="4"/>
-    <rect x="-70" y="-46" width="42" height="42" rx="6" transform="rotate(45 -49 -25)" fill="#e30614"/>
-    <rect x="-22" y="-46" width="42" height="42" rx="6" transform="rotate(45 -1 -25)" fill="#01a298"/>
-    <rect x="-46" y="-22" width="42" height="42" rx="6" transform="rotate(45 -25 -1)" fill="#ffdd04"/>
-    <rect x="-46" y="26" width="42" height="42" rx="6" transform="rotate(45 -25 47)" fill="#e30614"/>
+    <rect x="-46" y="-92" width="46" height="46" rx="6" transform="rotate(45 -23 -69)" fill="#036EB1"/>
+    <rect x="-70" y="-46" width="42" height="42" rx="6" transform="rotate(45 -49 -25)" fill="#E30815"/>
+    <rect x="-22" y="-46" width="42" height="42" rx="6" transform="rotate(45 -1 -25)" fill="#01A298"/>
+    <rect x="-46" y="-22" width="42" height="42" rx="6" transform="rotate(45 -25 -1)" fill="#FFDD00"/>
+    <rect x="-46" y="26" width="42" height="42" rx="6" transform="rotate(45 -25 47)" fill="#E30815"/>
   </g>
 </svg>

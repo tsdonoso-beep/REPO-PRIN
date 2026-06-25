@@ -207,7 +207,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .cam { position: absolute; inset: 58px 0 0 0; background: #000; overflow: hidden; }
 .cam video { width: 100%; height: 100%; object-fit: cover; }
 .cam-mask { position: absolute; left: 0; right: 0; bottom: 118px; padding: 14px 18px; background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; border-left: 4px solid var(--accent); }
-.cam-mask .cm-brand { font: 800 16px Manrope; letter-spacing: .02em; }
+.cam-mask .cm-logo { height: 22px; width: auto; display: block; margin-bottom: 5px; }
 .cam-mask .cm-line { font: 600 12px Manrope; margin-top: 4px; opacity: .95; }
 .cam-mask .cm-node { font: 700 12px Manrope; margin-top: 6px; color: #bfe0f5; }
 .cam-doc { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; font: 700 11px Manrope; padding: 6px 12px; border-radius: 999px; }

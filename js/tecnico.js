@@ -353,7 +353,7 @@
     cam.innerHTML = `
       <video id="cam-video" autoplay playsinline muted></video>
       ${nodo.con_mascara ? `<div class="cam-mask" id="cam-mask">
-        <div class="cm-brand">REPO PRINT</div>
+        <div class="cm-logo"><img src="assets/logo.svg" alt="INROPRIN"></div>
         <div class="cm-line" id="cm-fecha"></div>
         <div class="cm-line" id="cm-loc"></div>
         <div class="cm-node">${esc(nodo.nombre)}</div></div>` : '<div class="cam-doc">Modo documento · sin máscara</div>'}
@@ -392,21 +392,51 @@
     const rv = $('#btn-review'); rv.disabled = false; rv.textContent = `Revisar (${state.captured.length})`;
   }
 
+  // Pre-load INROPRIN logo so burnMask can draw it synchronously
+  const _maskLogo = new Image(); _maskLogo.src = 'assets/logo.svg';
+
   function burnMask(ctx, w, h) {
-    const barH = Math.round(h * 0.16);
-    const g = ctx.createLinearGradient(0, h - barH, 0, h);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.35, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,.78)');
-    ctx.fillStyle = g; ctx.fillRect(0, h - barH, w, barH);
-    const pad = Math.round(w * .035), fs = Math.max(14, Math.round(w * .026));
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
-    ctx.font = `800 ${Math.round(fs * 1.1)}px Manrope, sans-serif`; ctx.fillText('REPO PRINT', pad, h - pad - fs * 3.1);
+    const pad = Math.round(w * .032);
+
+    // === TOP strip: INROPRIN logo ===
+    const topH = Math.round(h * 0.09);
+    const topG = ctx.createLinearGradient(0, 0, 0, topH);
+    topG.addColorStop(0, 'rgba(0,0,0,.72)'); topG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = topG; ctx.fillRect(0, 0, w, topH);
+    if (_maskLogo.complete && _maskLogo.naturalWidth) {
+      const lh = Math.round(topH * .66);
+      ctx.drawImage(_maskLogo, pad, Math.round((topH - lh) / 2), lh, lh);
+    }
+
+    // === BOTTOM bar: timestamp · location · node name (3 separate lines) ===
+    const barH = Math.round(h * 0.21);
+    const bg = ctx.createLinearGradient(0, h - barH, 0, h);
+    bg.addColorStop(0, 'rgba(0,0,0,0)'); bg.addColorStop(.28, 'rgba(0,0,0,.50)'); bg.addColorStop(1, 'rgba(0,0,0,.82)');
+    ctx.fillStyle = bg; ctx.fillRect(0, h - barH, w, barH);
+
+    const fs = Math.max(11, Math.round(w * .023));
+    const lnH = Math.round(fs * 1.72);
+
+    // Node name — right, top line, light blue tint
+    ctx.textAlign = 'right';
+    ctx.font = `700 ${Math.max(10, Math.round(fs * .88))}px Manrope, sans-serif`;
+    ctx.fillStyle = 'rgba(191,224,245,.95)';
+    ctx.fillText(state.currentNodo.nombre.slice(0, 45), w - pad, h - pad - lnH * 2);
+
+    // Timestamp — left, middle line
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
     ctx.font = `600 ${fs}px Manrope, sans-serif`;
-    ctx.fillText('🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }), pad, h - pad - fs * 1.9);
+    ctx.fillText('🕓 ' + new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }), pad, h - pad - lnH);
+
+    // Location — left, bottom line
     const loc = locActual();
-    ctx.fillText(loc ? `📍 ${loc.direccion}, ${loc.distrito}, ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`, pad, h - pad - fs * .7);
-    ctx.textAlign = 'right'; ctx.font = `700 ${Math.round(fs * .9)}px Manrope, sans-serif`; ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.fillText(state.currentNodo.nombre.slice(0, 40), w - pad, h - pad - fs * .7); ctx.textAlign = 'left';
-    ctx.fillStyle = state.accent; ctx.fillRect(0, h - barH, Math.round(w * .012), barH);
+    const locText = loc ? `📍 ${loc.direccion}, ${loc.distrito}, ${loc.provincia}` : `📍 ${(colegioActual() || {}).nombre || ''}`;
+    // Truncate if too long to avoid overflow
+    ctx.fillText(locText.slice(0, 70), pad, h - pad);
+
+    // Accent left stripe
+    ctx.fillStyle = state.accent;
+    ctx.fillRect(0, h - barH, Math.round(w * .012), barH);
   }
 
   // ============================================================
