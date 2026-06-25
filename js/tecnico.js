@@ -107,24 +107,108 @@
 
   function setBar(title, sub, back) { $('#tbar-title').textContent = title; $('#tbar-sub').textContent = sub || ''; $('#btn-back').classList.toggle('hidden', !back); }
 
+  // El "punto de decisión": un nodo cuyos hijos son exactamente
+  // «1. REGISTRO FOTOGRÁFICO» (con máscara, por grupos) + «2. SUBIDA DOCUMENTOS» (libre).
+  function decisionPoint(items) {
+    if (items.length !== 2) return null;
+    const reg = items.find((n) => n.tipo === 'contenedor' && /REGISTRO/i.test(n.nombre));
+    const doc = items.find((n) => n.tipo === 'subida' && /(DOCUMENTOS|SUBIDA)/i.test(n.nombre));
+    return reg && doc ? { reg, doc } : null;
+  }
+  function breadcrumb() {
+    const cb = el('div', { class: 'crumb-bar' });
+    cb.innerHTML = '📍 ' + state.stack.map((n) => esc(n.nombre)).join(' <span style="color:#c4c9cf">›</span> ');
+    return cb;
+  }
+
   function renderTree() {
     state.currentNodo = null; stopCamera();
     const parent = state.stack.length ? state.stack[state.stack.length - 1] : null;
     const items = childrenOf(parent ? parent.id : null);
+    // ¿Llegamos a un colegio/taller? → pantalla «¿Qué registrarás?»
+    const dec = parent && decisionPoint(items);
+    if (dec) return renderChoice(parent, dec.reg, dec.doc);
     setBar(parent ? parent.nombre : 'Proyectos', parent ? rutaActual() : `Hola, ${state.tecnico.nombre}`, state.stack.length > 0);
     const screen = $('#screen'); screen.innerHTML = '';
-    if (parent) { const cb = el('div', { class: 'crumb-bar' }); cb.innerHTML = '📍 ' + state.stack.map((n) => esc(n.nombre)).join(' <span style="color:#c4c9cf">›</span> '); screen.appendChild(cb); }
+    if (parent) screen.appendChild(breadcrumb());
     if (items.length === 0) { screen.appendChild(el('div', { class: 'empty' }, '<div class="ic">📭</div><p>No hay carpetas aquí.</p>')); return; }
+    // ¿Estamos dentro de «1. REGISTRO FOTOGRÁFICO»? Entonces los hijos son grupos (1.1, 1.2…).
+    const esGrupos = parent && /REGISTRO/i.test(parent.nombre);
+    if (esGrupos) screen.appendChild(el('div', { class: 'group-hint' }, 'Toca un grupo para tomar o ver sus fotos.'));
     const list = el('div', { class: 'list' });
     items.forEach((n) => {
       const isSub = n.tipo === 'subida';
-      const card = el('div', { class: 'node-card' });
-      const meta = isSub ? `<span class="tag ${n.con_mascara ? 'mask' : 'doc'}">${n.con_mascara ? '📷 con máscara' : '📄 documento'}</span>` : `${childrenOf(n.id).length} carpeta(s)`;
-      card.innerHTML = `<div class="nic ${isSub ? 'sub' : 'cont'}">${isSub ? '📷' : '📁'}</div><div class="nbody"><div class="nname">${esc(n.nombre)}</div><div class="nmeta">${meta}</div></div><div class="chev">${isSub ? '📸' : '›'}</div>`;
+      const card = el('div', { class: 'node-card' + (isSub ? ' group' : '') });
+      if (isSub) {
+        card.dataset.nid = n.id;
+        card.innerHTML = `<div class="nic sub">📷</div>
+          <div class="nbody"><div class="nname">${esc(n.nombre)}</div>
+          <div class="nmeta" data-meta>${n.con_mascara ? 'Cargando…' : '📄 Subida libre'}</div></div>
+          <div class="gstat" data-gstat></div>`;
+      } else {
+        card.innerHTML = `<div class="nic cont">📁</div><div class="nbody"><div class="nname">${esc(n.nombre)}</div><div class="nmeta">${childrenOf(n.id).length} carpeta(s)</div></div><div class="chev">›</div>`;
+      }
       card.addEventListener('click', () => { if (isSub) openFolder(n); else { state.stack.push(n); renderTree(); } });
       list.appendChild(card);
     });
     screen.appendChild(list);
+    decorateGroups();
+  }
+
+  // Pantalla «¿Qué registrarás?» — registro fotográfico (con máscara) vs documentos (libre)
+  function renderChoice(parent, reg, doc) {
+    state.currentNodo = null; stopCamera();
+    setBar(parent.nombre, rutaActual(), true);
+    const screen = $('#screen'); screen.innerHTML = '';
+    screen.appendChild(breadcrumb());
+    screen.appendChild(el('div', { class: 'choice-head' }, '<div class="ch-q">¿Qué registrarás?</div><div class="ch-sub">Elige el tipo de registro para esta ubicación</div>'));
+    const wrap = el('div', { class: 'choice' });
+    const cReg = el('button', { class: 'choice-card reg' });
+    cReg.innerHTML = `<div class="cc-ic reg">📷</div>
+      <div class="cc-body"><div class="cc-t">Registro fotográfico</div>
+      <div class="cc-d">Fotos con máscara, organizadas por grupos</div>
+      <div class="cc-tags"><span class="cc-tag">📍 Con ubicación</span><span class="cc-tag">🗂 ${childrenOf(reg.id).length} grupos</span></div></div>
+      <div class="cc-go">→</div>`;
+    cReg.addEventListener('click', () => { state.stack.push(reg); renderTree(); });
+    const cDoc = el('button', { class: 'choice-card doc' });
+    cDoc.innerHTML = `<div class="cc-ic doc">📄</div>
+      <div class="cc-body"><div class="cc-t">Documentos</div>
+      <div class="cc-d">Cámara limpia, sin máscara</div>
+      <div class="cc-tags"><span class="cc-tag">📎 Subida libre</span></div></div>
+      <div class="cc-go">→</div>`;
+    cDoc.addEventListener('click', () => openFolder(doc));
+    wrap.appendChild(cReg); wrap.appendChild(cDoc);
+    screen.appendChild(wrap);
+    decorateChoice(reg, doc);
+  }
+
+  // Rellena los contadores de fotos de cada grupo (lista) leyendo la cola local.
+  async function decorateGroups() {
+    const cards = $('#screen').querySelectorAll('.node-card[data-nid]');
+    if (!cards.length) return;
+    const all = await idbAll();
+    cards.forEach((card) => {
+      const id = card.dataset.nid;
+      const meta = card.querySelector('[data-meta]'); const gs = card.querySelector('[data-gstat]');
+      if (!meta) return;
+      const recs = all.filter((r) => String(r.nodo_id) === String(id));
+      if (!recs.length) { meta.textContent = 'Sin fotos aún'; meta.className = 'nmeta soft'; gs.className = 'gstat'; gs.textContent = ''; return; }
+      const c = { done: 0, uploading: 0, pending: 0, error: 0 }; recs.forEach((r) => c[r.status]++);
+      const enCola = c.pending + c.uploading;
+      if (c.error) { meta.innerHTML = `<span class="gm err">! ${c.error} con error</span>` + (c.done ? ` · ${c.done} subidas` : ''); gs.className = 'gstat error'; gs.textContent = '!'; }
+      else if (enCola) { meta.innerHTML = (c.done ? `${c.done} subidas · ` : '') + `<span class="gm pend">☁ ${enCola} en cola${navigator.onLine ? '' : ' · sin conexión'}</span>`; gs.className = 'gstat pending'; gs.textContent = '☁'; }
+      else { meta.innerHTML = `<span class="gm ok">✓ ${c.done} foto(s) subida(s)</span>`; gs.className = 'gstat done'; gs.textContent = '✓'; }
+      meta.classList.add('nmeta');
+    });
+  }
+  // Contadores en las dos tarjetas de la pantalla de elección.
+  async function decorateChoice(reg, doc) {
+    const all = await idbAll();
+    const ids = new Set(childrenOf(reg.id).map((n) => String(n.id)));
+    const nReg = all.filter((r) => ids.has(String(r.nodo_id))).length;
+    const nDoc = all.filter((r) => String(r.nodo_id) === String(doc.id)).length;
+    const tag = (card, n) => { const t = $('#screen').querySelector(card + ' .cc-count'); if (t) return; const body = $('#screen').querySelector(card + ' .cc-tags'); if (body && n) body.insertAdjacentHTML('beforeend', `<span class="cc-tag cc-count ok">✓ ${n} en cola/subidas</span>`); };
+    tag('.choice-card.reg', nReg); tag('.choice-card.doc', nDoc);
   }
   $('#btn-back').addEventListener('click', () => {
     if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) return; state.captured = []; }
@@ -336,7 +420,7 @@
       }
     } finally { _flushing = false; }
   }
-  function refresh() { updateBadge(); if (state.currentNodo && $('#filelist')) renderFolder(); }
+  function refresh() { updateBadge(); if (state.currentNodo && $('#filelist')) renderFolder(); else decorateGroups(); }
   async function updateBadge() {
     const pend = (await idbAll()).filter((r) => r.status !== 'done').length;
     let b = $('#pend-badge');
@@ -344,7 +428,7 @@
     if (pend > 0) { b.classList.remove('hidden'); b.innerHTML = `<span class="${navigator.onLine ? 'dot-on' : 'dot-off'}"></span>${pend}`; } else b.classList.add('hidden');
   }
   window.addEventListener('online', () => { toast('Conexión restablecida — subiendo…'); flushQueue(); });
-  window.addEventListener('offline', () => { toast('Sin conexión — se guardará en cola', 'info'); updateBadge(); });
+  window.addEventListener('offline', () => { toast('Sin conexión — se guardará en cola', 'info'); updateBadge(); decorateGroups(); });
   setInterval(() => { if (state.tecnico && navigator.onLine) flushQueue(); }, 30000);
 
   // ============================================================

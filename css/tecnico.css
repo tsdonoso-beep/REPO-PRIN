@@ -96,6 +96,40 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .empty .ic { font-size: 44px; }
 .empty p { font: 600 14px Manrope; margin-top: 12px; }
 
+/* ---------- Grupos (lista 1.1, 1.2…) con contadores ---------- */
+.group-hint { padding: 14px 16px 2px; font: 600 12.5px Manrope; color: var(--muted); }
+.node-card.group .nmeta.soft { color: var(--muted-2); }
+.gm { font: 700 11.5px Manrope; }
+.gm.ok { color: #0a7d75; } .gm.pend { color: #b25a14; } .gm.err { color: #c20512; }
+.gstat { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 800 14px Manrope; flex-shrink: 0; }
+.gstat:empty { background: #eef1f4; }
+.gstat:empty::before { content: '›'; color: var(--muted-2); font-size: 18px; }
+.gstat.done { background: #0a7d75; color: #fff; }
+.gstat.pending { background: #fdf0e6; color: #b25a14; }
+.gstat.error { background: var(--red); color: #fff; }
+
+/* ============================================================
+   ¿QUÉ REGISTRARÁS? (elección registro vs documentos)
+   ============================================================ */
+.choice-head { padding: 22px 18px 6px; }
+.choice-head .ch-q { font: 800 21px Manrope; letter-spacing: -.01em; }
+.choice-head .ch-sub { font: 600 13px Manrope; color: var(--muted); margin-top: 4px; }
+.choice { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.choice-card { width: 100%; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(16,24,40,.05); transition: transform .05s; }
+.choice-card:active { transform: scale(.98); }
+.choice-card.reg { border-left: 4px solid var(--accent); }
+.choice-card.doc { border-left: 4px solid var(--teal); }
+.choice-card .cc-ic { width: 56px; height: 56px; border-radius: 15px; display: grid; place-items: center; font-size: 28px; flex-shrink: 0; }
+.choice-card .cc-ic.reg { background: #eef5fb; }
+.choice-card .cc-ic.doc { background: #e6f6f4; }
+.choice-card .cc-body { flex: 1; min-width: 0; }
+.choice-card .cc-t { font: 800 16px Manrope; }
+.choice-card .cc-d { font: 600 12.5px Manrope; color: var(--muted); margin-top: 3px; }
+.choice-card .cc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.choice-card .cc-tag { font: 700 10.5px Manrope; padding: 3px 9px; border-radius: 999px; background: #f1f3f5; color: var(--muted); }
+.choice-card .cc-tag.ok { background: #e6f6f4; color: #0a7d75; }
+.choice-card .cc-go { width: 34px; height: 34px; border-radius: 50%; background: #f1f3f5; color: var(--accent); font: 800 18px Manrope; display: grid; place-items: center; flex-shrink: 0; }
+
 /* ============================================================
    CARPETA DE SUBIDA · captura
    ============================================================ */
