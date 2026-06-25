@@ -185,6 +185,9 @@
     const box = el('div', { class: 'tree-box' });
     const toolbar = el('div', { class: 'tree-toolbar' });
     toolbar.innerHTML = '<span style="font:800 14px Manrope">Árbol de estructura</span><span class="sp"></span>';
+    const syncBtn = el('button', { class: 'btn btn-secondary btn-sm', title: 'Crear en Google Drive las carpetas pendientes' }, '🔄 Sincronizar Drive');
+    syncBtn.addEventListener('click', () => syncDrive(syncBtn));
+    toolbar.appendChild(syncBtn);
     const archToggle = el('label', { class: 'badge badge-archivado', style: 'cursor:pointer' });
     archToggle.innerHTML = `<input type="checkbox" ${state.showArchived ? 'checked' : ''} style="margin-right:4px"> Ver archivados`;
     archToggle.querySelector('input').addEventListener('change', (e) => { state.showArchived = e.target.checked; renderEstructura(); });
@@ -398,15 +401,17 @@
       if (!nombre) { toast('Ingresa un nombre', 'err'); return; }
       create.disabled = true; create.innerHTML = '<span class="spinner"></span>';
       const maxOrden = Math.max(-1, ...state.nodos.filter((n) => n.parent_id === (parent ? parent.id : null)).map((n) => n.orden));
-      const { error } = await sb.from('nodos').insert({
+      const { data, error } = await sb.from('nodos').insert({
         nombre, tipo, parent_id: parent ? parent.id : null,
         con_mascara: tipo === 'subida' ? maskOn : true, orden: maxOrden + 1,
-      });
+      }).select();
       create.disabled = false; create.textContent = 'Crear';
       if (error) { toast(cleanErr(error.message), 'err'); return; }
       root.innerHTML = '';
       if (parent) state.expanded.add(parent.id);
       toast('Nodo creado');
+      // Crear su carpeta en Drive (si Drive está configurado; falla en silencio si no)
+      if (data && data[0]) sb.functions.invoke('drive-sync', { body: { action: 'node', node_id: data[0].id } }).then(({ error: e }) => { if (!e) renderEstructura(); });
       await renderEstructura();
     });
     foot.appendChild(cancel); foot.appendChild(create);
@@ -585,6 +590,22 @@
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const a = el('a', { href: URL.createObjectURL(blob), download: `bitacora_repoprint_${new Date().toISOString().slice(0, 10)}.csv` });
     document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ============================================================
+  // SINCRONIZACIÓN CON GOOGLE DRIVE
+  // ============================================================
+  async function syncDrive(btn) {
+    const original = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner dark"></span> Sincronizando…';
+    const { data, error } = await sb.functions.invoke('drive-sync', { body: { action: 'backfill' } });
+    btn.disabled = false; btn.innerHTML = original;
+    if (error) { toast('Error al sincronizar con Drive', 'err'); return; }
+    if (data && data.error) { toast(data.error, 'err'); return; }
+    const creadas = data ? data.created : 0;
+    toast(creadas > 0 ? `${creadas} carpeta(s) creada(s) en Drive` : 'Todo ya estaba sincronizado');
+    if (data && data.errores && data.errores.length) toast(`${data.errores.length} con error — revisa permisos`, 'err');
+    await renderEstructura();
   }
 
   // ============================================================
