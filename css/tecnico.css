@@ -1,0 +1,132 @@
+/* ============================================================
+   REPO PRINT · App del técnico (móvil) — identidad Roland Print
+   ============================================================ */
+:root {
+  --accent: #006eb1;
+  --accent-dark: #0a5e9a;
+  --teal: #01a298;
+  --red: #e30614;
+  --yellow: #ffdd04;
+  --ink: #1a1f24;
+  --muted: #687076;
+  --muted-2: #9aa0a6;
+  --line: #eceef1;
+  --bg: #f5f6f8;
+  --card: #fff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased; color: var(--ink); background: var(--bg);
+  overscroll-behavior: none;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.hidden { display: none !important; }
+
+#app { max-width: 480px; margin: 0 auto; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); position: relative; overflow: hidden; }
+
+/* ---------- Topbar ---------- */
+.tbar { height: 58px; background: var(--accent); color: #fff; display: flex; align-items: center; padding: 0 14px; gap: 12px; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,110,177,.25); }
+.tbar .back { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.16); color: #fff; font-size: 20px; display: grid; place-items: center; }
+.tbar .title { flex: 1; min-width: 0; }
+.tbar .title .t1 { font: 800 16px Manrope; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbar .title .t2 { font: 600 11px Manrope; color: rgba(255,255,255,.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbar .av { width: 34px; height: 34px; border-radius: 50%; background: #fff; color: var(--accent); display: grid; place-items: center; font: 800 12px Manrope; }
+
+.screen { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* ============================================================
+   LOGIN POR PIN
+   ============================================================ */
+#login { position: absolute; inset: 0; background: linear-gradient(165deg, var(--accent) 0%, var(--accent-dark) 100%); display: flex; flex-direction: column; align-items: center; color: #fff; padding: 40px 26px 26px; z-index: 50; }
+#login .logo { width: 76px; height: 76px; background: #fff; border-radius: 20px; display: grid; place-items: center; padding: 14px; box-shadow: 0 12px 30px rgba(0,0,0,.2); }
+#login h1 { font: 800 24px Manrope; letter-spacing: .04em; margin-top: 18px; }
+#login .sub { font: 600 12px Manrope; color: rgba(255,255,255,.8); letter-spacing: .1em; margin-top: 2px; }
+
+.tec-select { width: 100%; margin-top: 30px; }
+.tec-select label { font: 700 11px Manrope; color: rgba(255,255,255,.85); letter-spacing: .06em; display: block; margin-bottom: 8px; }
+.tec-select select {
+  width: 100%; height: 54px; border-radius: 14px; border: none; padding: 0 16px;
+  font: 700 16px Manrope; color: var(--ink); background: #fff; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M5 8l5 5 5-5' stroke='%23687076' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 16px center;
+}
+
+.pin-display { display: flex; gap: 12px; margin: 28px 0 8px; }
+.pin-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); transition: all .12s; }
+.pin-dot.filled { background: #fff; border-color: #fff; }
+.pin-error { font: 700 12px Manrope; color: #ffdada; height: 18px; }
+
+.keypad { width: 100%; max-width: 320px; margin-top: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.key { height: 66px; border-radius: 16px; background: rgba(255,255,255,.14); color: #fff; font: 700 26px Manrope; display: grid; place-items: center; transition: background .1s, transform .05s; }
+.key:active { background: rgba(255,255,255,.3); transform: scale(.96); }
+.key.wide { font-size: 15px; font-weight: 800; letter-spacing: .04em; }
+.key.ok { background: var(--teal); }
+.key.ok:active { background: #018a80; }
+
+/* ============================================================
+   ÁRBOL (navegación drill-down)
+   ============================================================ */
+.crumb-bar { padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--line); font: 600 12px Manrope; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.crumb-bar b { color: var(--ink); }
+
+.list { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.node-card {
+  background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(16,24,40,.05);
+  display: flex; align-items: center; gap: 14px; border: 1px solid var(--line);
+}
+.node-card:active { background: #f7f8fa; }
+.node-card .nic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; flex-shrink: 0; }
+.node-card .nic.cont { background: #eef5fb; }
+.node-card .nic.sub { background: #e6f6f4; }
+.node-card .nbody { flex: 1; min-width: 0; }
+.node-card .nname { font: 700 15px Manrope; color: var(--ink); }
+.node-card .nmeta { font: 600 12px Manrope; color: var(--muted-2); margin-top: 3px; display: flex; align-items: center; gap: 8px; }
+.node-card .chev { color: var(--muted-2); font-size: 20px; }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font: 700 10px Manrope; }
+.tag.mask { background: #eef5fb; color: var(--accent); }
+.tag.doc { background: #f1f3f5; color: var(--muted); }
+
+.empty { padding: 60px 30px; text-align: center; color: var(--muted); }
+.empty .ic { font-size: 44px; }
+.empty p { font: 600 14px Manrope; margin-top: 12px; }
+
+/* ============================================================
+   CARPETA DE SUBIDA · captura
+   ============================================================ */
+.upload-head { padding: 18px 16px; background: #fff; border-bottom: 1px solid var(--line); }
+.upload-head .ruta { font: 600 12px Manrope; color: var(--muted); }
+.upload-head .nm { font: 800 18px Manrope; margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+.gps-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; font: 700 11px Manrope; margin-top: 12px; }
+.gps-chip.on { background: #e6f6f4; color: #0a7d75; }
+.gps-chip.off { background: #fdf0e6; color: #b25a14; }
+
+.shots { padding: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.shot { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #eef1f4; }
+.shot img { width: 100%; height: 100%; object-fit: cover; }
+.shot .st { position: absolute; bottom: 0; left: 0; right: 0; padding: 4px 6px; font: 700 9px Manrope; color: #fff; }
+.shot .st.pending { background: rgba(178,90,20,.85); }
+.shot .st.uploading { background: rgba(0,110,177,.85); }
+.shot .st.done { background: rgba(10,125,117,.9); }
+.shot .st.error { background: rgba(227,6,20,.9); }
+.shot .rm { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font: 700 13px Manrope; display: grid; place-items: center; }
+
+/* Barra de captura inferior */
+.capture-bar { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); display: flex; gap: 12px; flex-shrink: 0; }
+.btn { flex: 1; height: 54px; border-radius: 14px; font: 800 15px Manrope; display: flex; align-items: center; justify-content: center; gap: 9px; }
+.btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 18px rgba(0,110,177,.28); }
+.btn-primary:active { filter: brightness(.95); }
+.btn-secondary { background: #eef1f4; color: var(--ink); flex: 0 0 54px; }
+.btn:disabled { opacity: .5; }
+.cam-input { display: none; }
+
+/* Toast + spinner */
+#toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; width: max-content; max-width: 90%; }
+.toast { padding: 12px 18px; border-radius: 12px; font: 700 13px Manrope; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.2); animation: tin .2s; text-align: center; }
+.toast.ok { background: #0a7d75; } .toast.err { background: var(--red); } .toast.info { background: var(--ink); }
+@keyframes tin { from { opacity: 0; transform: translateY(10px); } }
+.spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.center-load { display: grid; place-items: center; padding: 70px 0; }
+.center-load .spinner { border-color: rgba(0,110,177,.2); border-top-color: var(--accent); width: 30px; height: 30px; }
