@@ -80,9 +80,12 @@
   async function enterApp() {
     $('#login').classList.add('hidden'); $('#tbar').classList.remove('hidden'); $('#screen').classList.remove('hidden');
     $('#btn-logout').textContent = initials(state.tecnico.nombre);
-    const { data: c } = await sb.from('configuracion').select('accent_color').eq('id', 1).single().catch(() => ({ data: null }));
-    if (c && c.accent_color) { state.accent = c.accent_color; document.documentElement.style.setProperty('--accent', c.accent_color); }
-    await loadNodos(); state.stack = []; renderTree(); flushQueue(); updateBadge();
+    try {
+      const { data: c } = await sb.from('configuracion').select('accent_color').eq('id', 1).maybeSingle();
+      if (c && c.accent_color) { state.accent = c.accent_color; document.documentElement.style.setProperty('--accent', c.accent_color); }
+    } catch (_) { /* sin conexión u otro: se mantiene el accent por defecto */ }
+    try { await loadNodos(); } catch (_) { /* usa caché local si existe */ }
+    state.stack = []; renderTree(); flushQueue(); updateBadge();
   }
   $('#btn-logout').addEventListener('click', async () => {
     const pend = (await idbAll()).filter((r) => r.status !== 'done').length;
