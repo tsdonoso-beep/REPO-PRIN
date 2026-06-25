@@ -125,6 +125,61 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .btn:disabled { opacity: .5; }
 .cam-input { display: none; }
 
+/* ---------- Chips resumen + lista de archivos ---------- */
+.chips-row { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 14px 4px; }
+.chip { padding: 4px 10px; border-radius: 999px; font: 700 11px Manrope; }
+.chip.ok { background: #e6f6f4; color: #0a7d75; }
+.chip.up { background: #eef5fb; color: var(--accent); }
+.chip.pend { background: #fdf0e6; color: #b25a14; }
+.chip.err { background: #fde7e9; color: #c20512; }
+.filelist { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.frow { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.fthumb { width: 46px; height: 46px; border-radius: 9px; object-fit: cover; background: #eef1f4; flex-shrink: 0; }
+.fbody { flex: 1; min-width: 0; }
+.fname { font: 700 12px Manrope; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fmeta { font: 600 11px Manrope; color: var(--muted); margin-top: 3px; }
+.fmeta.st-done { color: #0a7d75; } .fmeta.st-error { color: #c20512; } .fmeta.st-pending { color: #b25a14; }
+.fbar { height: 5px; border-radius: 3px; background: #e6e8eb; overflow: hidden; margin-top: 5px; }
+.fbar i { display: block; height: 100%; width: 60%; background: var(--accent); border-radius: 3px; animation: prog 1.2s ease-in-out infinite; }
+@keyframes prog { 0% { width: 15%; } 50% { width: 85%; } 100% { width: 15%; } }
+.fstat { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 800 13px Manrope; flex-shrink: 0; }
+.fstat.done { background: #0a7d75; color: #fff; } .fstat.error { background: var(--red); color: #fff; }
+.fstat.uploading { background: #eef5fb; color: var(--accent); } .fstat.pending { background: #fdf0e6; color: #b25a14; }
+
+/* ---------- Cámara en vivo ---------- */
+.cam { position: absolute; inset: 58px 0 0 0; background: #000; overflow: hidden; }
+.cam video { width: 100%; height: 100%; object-fit: cover; }
+.cam-mask { position: absolute; left: 0; right: 0; bottom: 118px; padding: 14px 18px; background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; border-left: 4px solid var(--accent); }
+.cam-mask .cm-brand { font: 800 16px Manrope; letter-spacing: .02em; }
+.cam-mask .cm-line { font: 600 12px Manrope; margin-top: 4px; opacity: .95; }
+.cam-mask .cm-node { font: 700 12px Manrope; margin-top: 6px; color: #bfe0f5; }
+.cam-doc { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; font: 700 11px Manrope; padding: 6px 12px; border-radius: 999px; }
+.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 118px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px calc(env(safe-area-inset-bottom)) 24px; }
+.cam-thumbs { width: 52px; height: 52px; border-radius: 12px; background: #222 center/cover no-repeat; border: 2px solid rgba(255,255,255,.5); position: relative; }
+.cam-thumbs span { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--red); color: #fff; font: 800 11px Manrope; display: grid; place-items: center; padding: 0 5px; }
+.cam-thumbs:empty, .cam-thumbs:not([style*="url"]) span { display: none; }
+.shutter { width: 74px; height: 74px; border-radius: 50%; background: #fff; border: 5px solid rgba(255,255,255,.45); box-shadow: 0 0 0 2px rgba(0,0,0,.2); }
+.shutter:active { transform: scale(.92); }
+.btn-review { background: var(--teal); color: #fff; font: 800 14px Manrope; padding: 0 18px; height: 48px; border-radius: 14px; }
+.btn-review:disabled { opacity: .35; }
+
+/* ---------- Revisión ---------- */
+.review-hint { padding: 14px 16px 4px; font: 600 13px Manrope; color: var(--muted); }
+.review-grid { padding: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.rev-cell { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #eef1f4; }
+.rev-cell img { width: 100%; height: 100%; object-fit: cover; }
+.rev-cell .rev-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font: 700 14px Manrope; }
+.rev-cell.more { display: grid; place-items: center; border: 2px dashed #c4c9cf; background: #fff; color: var(--accent); font: 700 14px Manrope; text-align: center; }
+
+/* ---------- Confirmación ---------- */
+.confirm { padding: 50px 28px; text-align: center; }
+.confirm-ic { width: 76px; height: 76px; border-radius: 50%; background: #e6f6f4; color: #0a7d75; font-size: 38px; display: grid; place-items: center; margin: 0 auto; }
+.confirm-t { font: 800 24px Manrope; margin-top: 18px; }
+.confirm-s { font: 600 14px Manrope; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.nomen { margin-top: 24px; background: #f4f6f8; border: 1px solid var(--line); border-radius: 12px; padding: 14px; text-align: left; }
+.nomen-l { font: 700 10px Manrope; color: var(--muted-2); letter-spacing: .06em; }
+.nomen-v { font: 700 12px ui-monospace, monospace; color: var(--ink); margin-top: 6px; word-break: break-all; }
+
 /* Toast + spinner */
 #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; width: max-content; max-width: 90%; }
 .toast { padding: 12px 18px; border-radius: 12px; font: 700 13px Manrope; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.2); animation: tin .2s; text-align: center; }
