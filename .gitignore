@@ -1,0 +1,14 @@
+# Llaves y secretos — NUNCA subir al repo
+*.json
+!package.json
+!package-lock.json
+!manifest.json
+.env
+.env.*
+*service-account*
+*credentials*
+*-key.json
+
+# Sistema
+.DS_Store
+node_modules/

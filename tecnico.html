@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#006eb1">
+  <title>REPO PRINT · Campo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tecnico.css">
+  <link rel="icon" href="assets/logo.svg">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="REPO PRINT">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== LOGIN POR PIN ===== -->
+    <div id="login">
+      <div class="logo"><img src="assets/logo.svg" alt="" style="width:100%;height:100%"></div>
+      <h1>REPO PRINT</h1>
+      <div class="sub">REGISTRO EN CAMPO</div>
+
+      <div class="tec-select">
+        <label>¿QUIÉN ERES?</label>
+        <select id="tec-select"><option value="">Cargando técnicos…</option></select>
+      </div>
+
+      <div class="pin-display" id="pin-display">
+        <span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span>
+      </div>
+      <div class="pin-error" id="pin-error"></div>
+
+      <div class="keypad" id="keypad">
+        <button class="key" data-k="1">1</button>
+        <button class="key" data-k="2">2</button>
+        <button class="key" data-k="3">3</button>
+        <button class="key" data-k="4">4</button>
+        <button class="key" data-k="5">5</button>
+        <button class="key" data-k="6">6</button>
+        <button class="key" data-k="7">7</button>
+        <button class="key" data-k="8">8</button>
+        <button class="key" data-k="9">9</button>
+        <button class="key wide" data-k="del">BORRAR</button>
+        <button class="key" data-k="0">0</button>
+        <button class="key ok" data-k="ok">✓</button>
+      </div>
+    </div>
+
+    <!-- ===== TOPBAR + PANTALLAS ===== -->
+    <header class="tbar hidden" id="tbar">
+      <button class="back hidden" id="btn-back">‹</button>
+      <div class="title"><div class="t1" id="tbar-title">REPO PRINT</div><div class="t2" id="tbar-sub"></div></div>
+      <button class="av" id="btn-logout" title="Salir">··</button>
+    </header>
+
+    <div class="screen hidden" id="screen"></div>
+
+    <!-- ===== NAV INFERIOR (Carpetas / Subidas) ===== -->
+    <nav class="navbar hidden" id="navbar">
+      <button class="navb active" data-tab="arbol"><span class="ni">🗂</span><span class="nl">Carpetas</span></button>
+      <button class="navb" data-tab="subidas"><span class="ni">☁</span><span class="nl">Subidas</span><i class="nav-badge hidden" id="nav-badge"></i></button>
+    </nav>
+  </div>
+
+  <input type="file" accept="image/*" capture="environment" class="cam-input" id="cam-input">
+  <canvas id="canvas" style="display:none"></canvas>
+  <div id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/tecnico.js"></script>
+</body>
+</html>
