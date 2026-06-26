@@ -27,6 +27,11 @@
 
   const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', attempts: 0, captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
 
+  // History API — enables iOS back-swipe gesture in standalone PWA mode.
+  let _histDepth = 0; // number of history entries we've pushed
+  let _histNav = false; // true while consuming a history entry via history.go(-1) internally
+  function _pushHistory() { history.pushState({ rp: 1 }, ''); _histDepth++; }
+
   // ============================================================
   // INDEXEDDB · cola de subidas
   // ============================================================
@@ -78,6 +83,7 @@
     enterApp();
   }
   async function enterApp() {
+    _histDepth = 0; _histNav = false;
     $('#login').classList.add('hidden'); $('#tbar').classList.remove('hidden'); $('#screen').classList.remove('hidden');
     $('#btn-logout').textContent = initials(state.tecnico.nombre);
     try {
@@ -176,7 +182,7 @@
       } else {
         card.innerHTML = `<div class="nic cont">📁</div><div class="nbody"><div class="nname">${esc(n.nombre)}</div><div class="nmeta">${childrenOf(n.id).length} carpeta(s)</div></div><div class="chev">›</div>`;
       }
-      card.addEventListener('click', () => { if (isSub) openFolder(n); else { state.stack.push(n); renderTree(); } });
+      card.addEventListener('click', () => { if (isSub) openFolder(n); else { state.stack.push(n); _pushHistory(); renderTree(); } });
       list.appendChild(card);
     });
     screen.appendChild(list);
@@ -197,7 +203,7 @@
       <div class="cc-d">Fotos con máscara, organizadas por grupos</div>
       <div class="cc-tags"><span class="cc-tag">📍 Con ubicación</span><span class="cc-tag">🗂 ${childrenOf(reg.id).length} grupos</span></div></div>
       <div class="cc-go">→</div>`;
-    cReg.addEventListener('click', () => { state.stack.push(reg); renderTree(); });
+    cReg.addEventListener('click', () => { state.stack.push(reg); _pushHistory(); renderTree(); });
     const cDoc = el('button', { class: 'choice-card doc' });
     cDoc.innerHTML = `<div class="cc-ic doc">📄</div>
       <div class="cc-body"><div class="cc-t">Documentos</div>
@@ -297,6 +303,15 @@
   $('#btn-back').addEventListener('click', () => {
     if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) return; state.captured = []; }
     stopCamera();
+    if (_histDepth > 0) { _histDepth--; _histNav = true; history.go(-1); }
+    if (state.currentNodo) { state.currentNodo = null; renderTree(); return; }
+    if (state.stack.length) { state.stack.pop(); renderTree(); }
+  });
+  window.addEventListener('popstate', () => {
+    if (_histNav) { _histNav = false; return; }
+    _histDepth = Math.max(0, _histDepth - 1);
+    if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) { _pushHistory(); return; } state.captured = []; }
+    stopCamera();
     if (state.currentNodo) { state.currentNodo = null; renderTree(); return; }
     if (state.stack.length) { state.stack.pop(); renderTree(); }
   });
@@ -305,6 +320,7 @@
   // CARPETA DE SUBIDA (vista grupo: chips + lista + Tomar fotos)
   // ============================================================
   async function openFolder(nodo) {
+    _pushHistory();
     state.currentNodo = nodo; stopCamera(); setNav(false);
     setBar(nodo.nombre, rutaActual(), true);
     const screen = $('#screen'); screen.innerHTML = '';
@@ -346,6 +362,7 @@
   // CÁMARA EN VIVO + MÁSCARA EN TIEMPO REAL + RÁFAGA
   // ============================================================
   async function openCamera(nodo) {
+    _pushHistory();
     state.captured = []; setNav(false);
     setBar(nodo.nombre, 'Cámara', true);
     const screen = $('#screen'); screen.innerHTML = '';
