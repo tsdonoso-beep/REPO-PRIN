@@ -368,9 +368,10 @@
     // máscara en vivo
     if (nodo.con_mascara) {
       const loc = locActual();
+      const col = colegioActual();
       const ls = [new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })];
       if (loc) { if (loc.direccion) ls.push(loc.direccion); if (loc.distrito) ls.push(loc.distrito); if (loc.provincia) ls.push(loc.provincia); }
-      else ls.push((colegioActual() || {}).nombre || '');
+      if (col && col.nombre) ls.push(col.nombre);
       $('#cam-gps').innerHTML = ls.map((t, i) => `<span class="${i === 0 ? 'g0' : 'g1'}">${esc(t)}</span>`).join('');
     }
     $('#shutter').addEventListener('click', takeShot);
@@ -451,15 +452,17 @@
     // === Caja de marca arriba a la izquierda ===
     drawBrandBox(ctx, w, pad, pad);
 
-    // === Sello GPS abajo a la derecha: fecha + ubicación (líneas separadas) ===
+    // === Sello GPS abajo a la derecha: fecha + ubicación + colegio (líneas separadas) ===
     const loc = locActual();
+    const col = colegioActual();
     const lines = [];
     lines.push(new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     if (loc) {
       if (loc.direccion) lines.push(loc.direccion);
       if (loc.distrito) lines.push(loc.distrito);
       if (loc.provincia) lines.push(loc.provincia);
-    } else { lines.push((colegioActual() || {}).nombre || ''); }
+    }
+    if (col && col.nombre) lines.push(col.nombre);
 
     const fs = Math.max(12, Math.round(w * .024));
     const lnH = Math.round(fs * 1.32);
