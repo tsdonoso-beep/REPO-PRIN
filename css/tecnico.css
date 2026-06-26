@@ -213,7 +213,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .cam-brand .cb-tx { display: flex; flex-direction: column; line-height: 1; }
 .cam-brand .cb-0 { font: 400 10px Manrope; color: #2b2f3a; }
 .cam-brand .cb-1 { font: 800 21px Manrope; color: #1c2541; letter-spacing: -.01em; margin: 2px 0 3px; }
-.cam-brand .cb-2 { font: 600 9px Manrope; color: #E30815; }
+.cam-brand .cb-2 { font: 600 9px Manrope; color: #1a1a1a; }
 /* Nombre del nodo (abajo a la izquierda) */
 .cam-node { position: absolute; left: 14px; bottom: 126px; max-width: 55%; font: 700 12px Manrope; color: #bfe0f5;
   text-shadow: 0 1px 4px rgba(0,0,0,.9); }
