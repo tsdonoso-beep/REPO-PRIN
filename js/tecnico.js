@@ -354,7 +354,7 @@
       <video id="cam-video" autoplay playsinline muted></video>
       ${nodo.con_mascara ? `
         <div class="cam-brand">
-          <img class="cb-ic" src="assets/logo.svg" alt="">
+          <img class="cb-ic" src="assets/logo-mark.svg" alt="">
           <div class="cb-tx"><b class="cb-0">Industrias</b><b class="cb-1">Roland Print</b><b class="cb-2">Material Didáctico Manipulable</b></div>
         </div>
         <div class="cam-node">${esc(nodo.nombre)}</div>
@@ -396,8 +396,8 @@
     const rv = $('#btn-review'); rv.disabled = false; rv.textContent = `Revisar (${state.captured.length})`;
   }
 
-  // Logo (diamante) precargado para dibujar el sello de marca de forma síncrona
-  const _maskLogo = new Image(); _maskLogo.src = 'assets/logo.svg';
+  // Logo (isotipo recortado) precargado para dibujar el sello de marca de forma síncrona
+  const _maskLogo = new Image(); _maskLogo.src = 'assets/logo-mark.svg';
 
   // Caja blanca "Industrias Roland Print" (esquina superior izquierda)
   function drawBrandBox(ctx, w, x, y) {
@@ -414,7 +414,7 @@
     const wSub = ctx.measureText('Material Didáctico Manipulable').width;
     const textW = Math.max(wBig, wSub);
     const textH = fsSm + lineGap + fsBig + lineGap + fsSm;
-    const iconH = Math.round(textH * .96), iconW = iconH;
+    const iconH = Math.round(textH * 1.02), iconW = iconH;
     const boxW = padI + iconW + gap + Math.ceil(textW) + padI;
     const boxH = padI * 2 + textH;
 
@@ -440,7 +440,7 @@
     ctx.fillText('Industrias', tx, ty);
     ctx.font = `800 ${fsBig}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#1c2541';
     ctx.fillText('Roland Print', tx, ty + fsSm + lineGap);
-    ctx.font = `600 ${fsSm}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#E30815';
+    ctx.font = `600 ${fsSm}px Manrope, Arial, sans-serif`; ctx.fillStyle = '#1a1a1a';
     ctx.fillText('Material Didáctico Manipulable', tx, ty + fsSm + lineGap + fsBig + lineGap);
     ctx.textBaseline = 'alphabetic';
   }
