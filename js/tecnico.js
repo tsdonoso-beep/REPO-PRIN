@@ -32,11 +32,6 @@
   let _histNav = false; // true while consuming a history entry via history.go(-1) internally
   function _pushHistory() { history.pushState({ rp: 1 }, ''); _histDepth++; }
 
-  // History API — enables iOS back-swipe gesture in standalone PWA mode.
-  let _histDepth = 0; // number of history entries we've pushed
-  let _histNav = false; // true while consuming a history entry via history.go(-1) internally
-  function _pushHistory() { history.pushState({ rp: 1 }, ''); _histDepth++; }
-
   // ============================================================
   // INDEXEDDB · cola de subidas
   // ============================================================
