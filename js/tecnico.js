@@ -25,7 +25,7 @@
   const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const slugUp = (s) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '').slice(0, 22);
 
-  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', attempts: 0, captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
+  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
 
   // History API — enables iOS back-swipe gesture in standalone PWA mode.
   let _histDepth = 0; // number of history entries we've pushed
@@ -73,13 +73,22 @@
     if (!tecId) { $('#pin-error').textContent = 'Selecciona tu nombre primero'; return; }
     if (state.pin.length !== 4) { $('#pin-error').textContent = 'Ingresa tu PIN de 4 dígitos'; return; }
     const { data, error } = await sb.rpc('tecnico_login', { p_tecnico_id: tecId, p_pin: state.pin });
-    if (error || !data || data.length === 0) {
-      state.attempts++; const rest = Math.max(0, 3 - state.attempts);
-      $('#pin-error').textContent = error ? 'Sin conexión' : `PIN incorrecto. Te quedan ${rest} intento(s).`;
+    if (error) { $('#pin-error').textContent = 'Sin conexión'; state.pin = ''; renderPin(); return; }
+    const r = (data && data[0]) || null;
+    // El servidor es la autoridad: lleva la cuenta de intentos y el bloqueo temporal.
+    if (!r || r.estado_login !== 'ok') {
+      if (r && r.estado_login === 'bloqueado') {
+        const mins = Math.max(1, Math.ceil((r.segundos_bloqueo || 0) / 60));
+        $('#pin-error').textContent = `Demasiados intentos. Espera ${mins} min e inténtalo de nuevo.`;
+      } else {
+        const rest = r ? r.intentos_restantes : 0;
+        $('#pin-error').textContent = `PIN incorrecto. Te queda${rest === 1 ? '' : 'n'} ${rest} intento(s).`;
+      }
       state.pin = ''; renderPin(); navigator.vibrate && navigator.vibrate(200); return;
     }
-    state.tecnico = data[0]; state.attempts = 0;
-    sessionStorage.setItem('repo_tec', JSON.stringify(data[0])); localStorage.setItem('repo_last_tec', tecId);
+    const tec = { id: r.id, nombre: r.nombre };
+    state.tecnico = tec;
+    sessionStorage.setItem('repo_tec', JSON.stringify(tec)); localStorage.setItem('repo_last_tec', tecId);
     enterApp();
   }
   async function enterApp() {
