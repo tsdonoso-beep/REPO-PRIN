@@ -403,7 +403,11 @@
     $('#shutter').addEventListener('click', takeShot);
     $('#btn-review').addEventListener('click', openReview);
     try {
-      state.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      // Pedimos alta resolución al sensor (el navegador elige lo más cercano soportado).
+      // Sin esto el stream sale en ~480/720p; con esto salta a 1080p/1440p en la mayoría de equipos.
+      const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1440 } }, audio: false };
+      try { state.stream = await navigator.mediaDevices.getUserMedia(constraints); }
+      catch (_) { state.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); }
       $('#cam-video').srcObject = state.stream;
     } catch (e) { toast('No se pudo abrir la cámara. Revisa permisos.', 'err'); }
   }
@@ -411,12 +415,13 @@
 
   function takeShot() {
     const v = $('#cam-video'); if (!v || !v.videoWidth) return;
-    const max = 1600, scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+    const max = 2560, scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
     const w = Math.round(v.videoWidth * scale), h = Math.round(v.videoHeight * scale);
     const c = $('#canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(v, 0, 0, w, h);
     if (state.currentNodo.con_mascara) burnMask(ctx, w, h);
-    const full = c.toDataURL('image/jpeg', 0.85);
+    const full = c.toDataURL('image/jpeg', 0.92);
     state.captured.push(full);
     navigator.vibrate && navigator.vibrate(40);
     const tb = $('#cam-thumbs'); tb.style.backgroundImage = `url(${full})`; tb.innerHTML = `<span>${state.captured.length}</span>`;
