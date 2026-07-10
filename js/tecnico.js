@@ -25,7 +25,7 @@
   const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const slugUp = (s) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '').slice(0, 22);
 
-  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '' };
+  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '', rendicion: null, gastoReview: null };
 
   // History API — enables iOS back-swipe gesture in standalone PWA mode.
   let _histDepth = 0; // number of history entries we've pushed
@@ -159,8 +159,9 @@
     const b = e.target.closest('.navb'); if (!b) return;
     const tab = b.dataset.tab;
     if (state.captured.length && !confirm('Tienes fotos sin subir en esta tanda. ¿Salir?')) return;
-    state.captured = []; stopCamera();
+    state.captured = []; stopCamera(); state.rendicion = null; state.gastoReview = null;
     if (tab === 'subidas') renderSubidas();
+    else if (tab === 'viaticos') renderViaticos();
     else { state.currentNodo = null; renderTree(); }
   });
 
@@ -275,7 +276,7 @@
   }
   async function paintSubList() {
     const cont = $('#sub-list'); if (!cont) return;
-    const all = (await idbAll()).sort((a, b) => b.id - a.id);
+    const all = (await idbAll()).filter((s) => s.kind !== 'viatico').sort((a, b) => b.id - a.id);
     const tot = { done: 0, queue: 0, error: 0 };
     all.forEach((s) => { if (s.status === 'done') tot.done++; else if (s.status === 'error') tot.error++; else tot.queue++; });
     const q = state.subQuery.trim().toLowerCase();
@@ -313,6 +314,7 @@
     if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) return; state.captured = []; }
     stopCamera();
     if (_histDepth > 0) { _histDepth--; _histNav = true; history.go(-1); }
+    if (viaticoBack()) return;
     if (state.currentNodo) { state.currentNodo = null; renderTree(); return; }
     if (state.stack.length) { state.stack.pop(); renderTree(); }
   });
@@ -321,9 +323,16 @@
     _histDepth = Math.max(0, _histDepth - 1);
     if (state.captured.length) { if (!confirm('Tienes fotos sin subir en esta tanda. ¿Descartarlas?')) { _pushHistory(); return; } state.captured = []; }
     stopCamera();
+    if (viaticoBack()) return;
     if (state.currentNodo) { state.currentNodo = null; renderTree(); return; }
     if (state.stack.length) { state.stack.pop(); renderTree(); }
   });
+  // Regreso dentro de Viáticos (rendición / revisión de gasto). Devuelve true si lo manejó.
+  function viaticoBack() {
+    if (state.gastoReview) { state.gastoReview = null; openRendicion(state.rendicion, false); return true; }
+    if (state.rendicion) { state.rendicion = null; renderViaticos(); return true; }
+    return false;
+  }
 
   // ============================================================
   // CARPETA DE SUBIDA (vista grupo: chips + lista + Tomar fotos)
@@ -605,6 +614,15 @@
       const pend = (await idbAll()).filter((r) => r.status === 'pending' || r.status === 'error');
       for (const rec of pend) {
         rec.status = 'uploading'; await idbPut(rec); refresh();
+        if (rec.kind === 'viatico') {
+          const { data, error } = await sb.functions.invoke('viatico-guardar', {
+            body: { tecnico_id: rec.tecnico_id, rendicion_id: rec.rendicion_id, image_base64: rec.base64, mime: rec.mime, thumb: rec.thumb },
+          });
+          if (error || (data && data.error)) { rec.status = 'error'; await idbPut(rec); if (!navigator.onLine) break; }
+          else { await idbDel(rec.id); } // el gasto ya vive en el servidor
+          refresh();
+          continue;
+        }
         const { data, error } = await sb.functions.invoke('drive-upload', {
           body: { tecnico_id: rec.tecnico_id, nodo_id: rec.nodo_id, filename: rec.filename, image_base64: rec.base64, mime: rec.mime, direccion: rec.direccion, fecha_captura: rec.fecha },
         });
@@ -617,11 +635,12 @@
   function refresh() {
     updateBadge();
     if (state.tab === 'subidas' && $('#sub-list')) paintSubList();
+    else if (state.tab === 'viaticos' && state.rendicion && $('#via-gastos')) renderRendicionGastos();
     else if (state.currentNodo && $('#filelist')) renderFolder();
     else decorateGroups();
   }
   async function updateBadge() {
-    const pend = (await idbAll()).filter((r) => r.status !== 'done').length;
+    const pend = (await idbAll()).filter((r) => r.status !== 'done' && r.kind !== 'viatico').length;
     let b = $('#pend-badge');
     if (!b) { b = el('div', { id: 'pend-badge', class: 'pend-badge', onclick: () => renderSubidas() }); $('#tbar').insertBefore(b, $('#btn-logout')); }
     if (pend > 0) { b.classList.remove('hidden'); b.innerHTML = `<span class="${navigator.onLine ? 'dot-on' : 'dot-off'}"></span>${pend}`; } else b.classList.add('hidden');
@@ -631,6 +650,169 @@
   window.addEventListener('online', () => { toast('Conexión restablecida — subiendo…'); flushQueue(); });
   window.addEventListener('offline', () => { toast('Sin conexión — se guardará en cola', 'info'); refresh(); });
   setInterval(() => { if (state.tecnico && navigator.onLine) flushQueue(); }, 30000);
+
+  // ============================================================
+  // MÓDULO VIÁTICOS · rendiciones + gastos con lectura por IA
+  // ============================================================
+  const CATS = [['combustible', '⛽ Combustible'], ['alimentacion', '🍽️ Alimentación'], ['hospedaje', '🏨 Hospedaje'], ['movilidad', '🚕 Movilidad'], ['peajes', '🛣️ Peajes'], ['materiales', '📦 Materiales'], ['otros', '🔖 Otros']];
+  const TIPOS = [['boleta', 'Boleta'], ['factura', 'Factura'], ['proforma', 'Proforma'], ['ticket', 'Ticket'], ['transferencia', 'Transferencia (Yape/Plin)'], ['otro', 'Otro']];
+  const vpill = (cls, txt) => `<span class="vpill ${cls}">${txt}</span>`;
+
+  async function renderViaticos() {
+    state.currentNodo = null; state.rendicion = null; state.gastoReview = null; stopCamera(); setNav(true, 'viaticos');
+    setBar('Viáticos', `Técnico · ${state.tecnico.nombre}`, false);
+    const screen = $('#screen'); screen.innerHTML = '';
+    const top = el('div', { class: 'via-top' });
+    top.appendChild(el('button', { class: 'btn btn-primary', onclick: nuevaRendicion }, '＋ Nueva rendición'));
+    screen.appendChild(top);
+    const list = el('div', { class: 'via-list', id: 'via-rends' }); screen.appendChild(list);
+    if (!navigator.onLine) { list.appendChild(el('div', { class: 'empty' }, '<div class="ic">📴</div><p>Conéctate para ver tus rendiciones.</p>')); return; }
+    const { data, error } = await sb.rpc('rendiciones_listar', { p_tecnico_id: state.tecnico.id });
+    if (error) { list.appendChild(el('div', { class: 'empty' }, '<div class="ic">⚠️</div><p>No se pudieron cargar.</p>')); return; }
+    if (!data || !data.length) { list.appendChild(el('div', { class: 'empty' }, '<div class="ic">🧾</div><p>Aún no tienes rendiciones.<br>Crea una para empezar.</p>')); return; }
+    data.forEach((r) => {
+      const badge = r.estado === 'borrador' ? vpill('warn', 'borrador') : r.estado === 'enviada' ? vpill('acc', 'enviada') : r.estado === 'aprobada' ? vpill('ok', 'aprobada') : vpill('', esc(r.estado));
+      const tot = `S/ ${(+r.total_pen).toFixed(2)}` + (+r.total_usd ? ` · $ ${(+r.total_usd).toFixed(2)}` : '');
+      const card = el('div', { class: 'via-card', onclick: () => openRendicion(r) });
+      card.innerHTML = `<div class="vc-body"><div class="vc-t">${esc(r.titulo)} ${badge}</div>
+        <div class="vc-m">${r.n_gastos} gasto(s)${+r.n_por_revisar ? ` · <b class="wtxt">${r.n_por_revisar} por revisar</b>` : ''} · ${tot}</div></div><div class="chev">›</div>`;
+      list.appendChild(card);
+    });
+  }
+
+  async function nuevaRendicion() {
+    const t = prompt('Nombre de la rendición (ej. «Viaje Cusco · jul»):'); if (t === null) return;
+    const { data, error } = await sb.rpc('rendicion_crear', { p_tecnico_id: state.tecnico.id, p_titulo: t || 'Rendición' });
+    if (error) return toast('No se pudo crear la rendición', 'err');
+    openRendicion(data);
+  }
+
+  function openRendicion(r, push = true) {
+    state.rendicion = r; state.gastoReview = null; setNav(false); if (push) _pushHistory();
+    setBar(r.titulo, 'Rendición', true);
+    const screen = $('#screen'); screen.innerHTML = '';
+    screen.appendChild(el('div', { class: 'via-gastos', id: 'via-gastos' }));
+    const bar = el('div', { class: 'capture-bar' });
+    bar.appendChild(el('button', { class: 'btn btn-secondary', style: 'flex:1', onclick: () => pickViatico(true) }, '📷 Foto'));
+    bar.appendChild(el('button', { class: 'btn btn-primary', onclick: () => pickViatico(false) }, '🖼️ Galería'));
+    screen.appendChild(bar);
+    renderRendicionGastos();
+  }
+
+  async function renderRendicionGastos() {
+    const cont = $('#via-gastos'); if (!cont || !state.rendicion) return;
+    cont.innerHTML = '';
+    const queued = (await idbAll()).filter((x) => x.kind === 'viatico' && x.rendicion_id === state.rendicion.id);
+    queued.forEach((q) => {
+      const st = q.status === 'error' ? vpill('err', 'error al subir') : vpill('warn', 'subiendo…');
+      cont.appendChild(el('div', { class: 'gasto-row' }, `<div class="gthumb">${q.thumb ? `<img src="${q.thumb}">` : '📄'}</div><div class="gbody"><div class="gname">Boleta en cola</div><div class="gsub">${st}</div></div>`));
+    });
+    const { data, error } = navigator.onLine
+      ? await sb.rpc('rendicion_gastos', { p_tecnico_id: state.tecnico.id, p_rendicion_id: state.rendicion.id })
+      : { data: [], error: null };
+    if (error) { cont.appendChild(el('div', { class: 'empty' }, '<div class="ic">⚠️</div><p>No se pudieron cargar los gastos.</p>')); return; }
+    const gastos = data || [];
+    let revisados = 0;
+    gastos.forEach((g) => {
+      if (g.estado === 'revisado') revisados++;
+      const cat = CATS.find((c) => c[0] === g.categoria);
+      const est = g.estado === 'revisado' ? vpill('ok', 'revisado ✓') : vpill('warn', 'por revisar');
+      const amt = g.total != null ? `${g.moneda === 'USD' ? '$' : 'S/'} ${(+g.total).toFixed(2)}` : '—';
+      const row = el('div', { class: 'gasto-row', onclick: () => openGastoReview(g) });
+      row.innerHTML = `<div class="gthumb">${g.thumb ? `<img src="${g.thumb}">` : '🧾'}</div>
+        <div class="gbody"><div class="gname">${esc(g.proveedor || g.entidad_pago || 'Gasto')}</div>
+        <div class="gsub">${cat ? vpill('acc', cat[1]) : ''} ${est}</div></div>
+        <div class="gamt">${amt}</div>`;
+      cont.appendChild(row);
+    });
+    if (!queued.length && !gastos.length) cont.appendChild(el('div', { class: 'empty' }, '<div class="ic">🧾</div><p>Sin gastos aún.<br>Toma o sube una boleta abajo.</p>'));
+    if (gastos.length && revisados === gastos.length && state.rendicion.estado === 'borrador') {
+      cont.appendChild(el('button', { class: 'btn btn-primary via-send', onclick: enviarRendicion }, `📨 Enviar rendición (${gastos.length})`));
+    }
+  }
+
+  function pickViatico(useCamera) { const inp = $(useCamera ? '#via-cam' : '#via-file'); if (!inp) return; inp.value = ''; inp.click(); }
+  function onViaticoFile(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const rd = new FileReader(); rd.onload = () => enqueueViatico(rd.result, f.type || 'image/jpeg'); rd.readAsDataURL(f);
+  }
+  async function enqueueViatico(dataUrl, mime) {
+    if (!state.rendicion) return;
+    const isImg = (mime || '').startsWith('image/');
+    const rec = { kind: 'viatico', tecnico_id: state.tecnico.id, rendicion_id: state.rendicion.id, fecha: new Date().toISOString(), status: 'pending' };
+    if (isImg) { const full = await downscale(dataUrl, 1600, 0.85); rec.base64 = full.split(',')[1]; rec.mime = 'image/jpeg'; rec.thumb = await downscale(dataUrl, 240, 0.6); }
+    else { rec.base64 = dataUrl.split(',')[1]; rec.mime = mime || 'application/pdf'; rec.thumb = null; }
+    await idbAdd(rec);
+    toast('Boleta en cola — se procesará al subir');
+    renderRendicionGastos(); updateBadge(); flushQueue();
+  }
+
+  function openGastoReview(g) {
+    state.gastoReview = g; setNav(false); _pushHistory();
+    setBar('Revisar gasto', g.proveedor || g.entidad_pago || '', true);
+    const screen = $('#screen'); screen.innerHTML = '';
+    const wrap = el('div', { class: 'greview' });
+    if (g.imagen_url) { const im = el('div', { class: 'gr-img' }); im.innerHTML = `<img src="${esc(g.imagen_url)}" alt="boleta">`; wrap.appendChild(im); }
+    const isT = g.tipo_comprobante === 'transferencia';
+    const reqm = (on) => on ? '<span class="reqm">obligatorio</span>' : '';
+    const fld = (label, id, val, type) => `<div class="fld"><label>${label}</label><input id="${id}"${type ? ` type="${type}" step="0.01"` : ''} value="${esc(val ?? '')}"></div>`;
+    const form = el('div', { class: 'gr-form' });
+    form.innerHTML =
+      `<div class="fld"><label>Tipo de comprobante</label><select id="f-tipo">${TIPOS.map(([k, l]) => `<option value="${k}" ${g.tipo_comprobante === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`
+      + fld('Proveedor / destinatario', 'f-prov', g.proveedor)
+      + `<div class="frow2"><div class="fld"><label>Moneda</label><select id="f-mon"><option value="PEN" ${g.moneda !== 'USD' ? 'selected' : ''}>S/ PEN</option><option value="USD" ${g.moneda === 'USD' ? 'selected' : ''}>$ USD</option></select></div>`
+      + fld('Total', 'f-total', g.total, 'number') + `</div>`
+      + `<div class="frow2">${fld('RUC', 'f-ruc', g.ruc)}${fld('Fecha (AAAA-MM-DD)', 'f-fecha', g.fecha_emision)}</div>`
+      + `<div class="frow2">${fld('Serie-N°', 'f-serie', g.serie_numero)}${fld('N° operación', 'f-nop', g.nro_operacion)}</div>`
+      + `<div class="fld"><label>Concepto ${reqm(isT)}</label><input id="f-conc" value="${esc(g.concepto ?? '')}" placeholder="${isT ? '¿En qué se gastó?' : '(opcional)'}"></div>`
+      + `<div class="fld"><label>Categoría ${reqm(isT)}</label><select id="f-cat"><option value="">— elegir —</option>${CATS.map(([k, l]) => `<option value="${k}" ${g.categoria === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+    wrap.appendChild(form); screen.appendChild(wrap);
+    const bar = el('div', { class: 'capture-bar' });
+    bar.appendChild(el('button', { class: 'btn btn-secondary', style: 'flex:0 0 auto;color:#c20512', onclick: () => borrarGasto(g) }, 'Borrar'));
+    bar.appendChild(el('button', { class: 'btn btn-primary', onclick: () => guardarGasto(g) }, 'Confirmar gasto'));
+    screen.appendChild(bar);
+  }
+
+  function _viaticoPop() { if (_histDepth > 0) { _histDepth--; _histNav = true; history.go(-1); } }
+
+  async function guardarGasto(g) {
+    const v = (id) => { const e = $('#' + id); return e ? e.value : null; };
+    const payload = {
+      p_tecnico_id: state.tecnico.id, p_gasto_id: g.id,
+      p_proveedor: v('f-prov'), p_ruc: v('f-ruc'), p_tipo_comprobante: v('f-tipo'), p_serie_numero: v('f-serie'),
+      p_entidad_pago: g.entidad_pago || null, p_nro_operacion: v('f-nop'), p_concepto: v('f-conc'), p_categoria: v('f-cat'),
+      p_moneda: v('f-mon'), p_total: v('f-total') ? parseFloat(v('f-total')) : null, p_fecha_emision: v('f-fecha') || null, p_placa: g.placa || null,
+      p_confirmar: true,
+    };
+    const { error } = await sb.rpc('gasto_actualizar', payload);
+    if (error) {
+      const m = error.message || '';
+      if (m.includes('FALTA_CONCEPTO')) return toast('Falta el concepto (obligatorio en transferencias)', 'err');
+      if (m.includes('FALTA_CATEGORIA')) return toast('Falta la categoría (obligatorio en transferencias)', 'err');
+      if (m.includes('FALTA_TOTAL')) return toast('Falta el total', 'err');
+      return toast('No se pudo guardar', 'err');
+    }
+    toast('Gasto confirmado ✓', 'ok');
+    state.gastoReview = null; _viaticoPop(); openRendicion(state.rendicion, false);
+  }
+
+  async function borrarGasto(g) {
+    if (!confirm('¿Borrar este gasto?')) return;
+    const { error } = await sb.rpc('gasto_borrar', { p_tecnico_id: state.tecnico.id, p_gasto_id: g.id });
+    if (error) return toast('No se pudo borrar', 'err');
+    toast('Gasto borrado', 'info');
+    state.gastoReview = null; _viaticoPop(); openRendicion(state.rendicion, false);
+  }
+
+  async function enviarRendicion() {
+    if (!confirm('¿Enviar esta rendición a administración? Ya no podrás editarla.')) return;
+    const { error } = await sb.rpc('rendicion_enviar', { p_tecnico_id: state.tecnico.id, p_rendicion_id: state.rendicion.id });
+    if (error) { const m = error.message || ''; if (m.includes('HAY_PENDIENTES')) return toast('Aún hay gastos por revisar', 'err'); return toast('No se pudo enviar', 'err'); }
+    toast('Rendición enviada ✓', 'ok');
+    state.rendicion = null; _viaticoPop(); renderViaticos();
+  }
+
+  ['#via-cam', '#via-file'].forEach((sel) => { const inp = $(sel); if (inp) inp.addEventListener('change', onViaticoFile); });
 
   // ============================================================
   // Boot + Service Worker
