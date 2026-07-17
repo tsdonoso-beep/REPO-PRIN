@@ -1,7 +1,8 @@
-// viatico-a-drive · al confirmar un gasto, sube su boleta al Drive de administración
-// en la estructura: Viáticos / <Técnico> / <Rendición> / <archivo con nombre limpio>.
-// Usa el service account (GOOGLE_SA_KEY) con supportsAllDrives, como el resto del sistema.
-// La carpeta padre y el cache de subcarpetas se guardan en configuracion / rendiciones.
+// viatico-a-drive · al confirmar un gasto: (1) sube su boleta al Drive de administración
+// en Viáticos/<Técnico>/<Rendición>/, y (2) actualiza la hoja "Registro de Viáticos"
+// (Google Sheet dentro de la carpeta Viáticos) con TODOS los gastos + enlaces.
+// Usa el service account (GOOGLE_SA_KEY) con supportsAllDrives. Solo Drive API (la hoja
+// se crea/actualiza subiendo un CSV que Drive convierte a Google Sheet).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const cors = {
@@ -63,6 +64,51 @@ async function renameFile(token: string, id: string, name: string) {
 }
 const sani = (s: unknown, max = 40) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s.-]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) || 'sin-dato';
 
+// ---- Hoja "Registro de Viáticos" (CSV -> Google Sheet vía Drive) ----
+const Q = String.fromCharCode(34);
+const csvCell = (v: unknown) => { const s = v == null ? '' : String(v); return Q + s.split(Q).join(Q + Q) + Q; };
+function buildCsv(gastos: any[], tecMap: Record<string, string>, renMap: Record<string, string>): string {
+  const head = ['Fecha', 'Técnico', 'Rendición', 'Tipo', 'Proveedor', 'RUC', 'Moneda', 'Total', 'Categoría', 'Concepto', 'Estado', 'N° operación', 'Confianza', 'Enlace boleta'];
+  const lines = [head.map(csvCell).join(',')];
+  for (const g of gastos) {
+    lines.push([
+      g.fecha_emision || '', tecMap[g.tecnico_id] || '', renMap[g.rendicion_id] || '', g.tipo_comprobante || '',
+      g.proveedor || '', g.ruc || '', g.moneda || '', g.total == null ? '' : g.total, g.categoria || '', g.concepto || '',
+      g.estado || '', g.nro_operacion || '', g.confianza_ocr == null ? '' : g.confianza_ocr, g.drive_url || '',
+    ].map(csvCell).join(','));
+  }
+  return '﻿' + lines.join('\n');
+}
+async function createSheet(token: string, name: string, parent: string, csv: string): Promise<string> {
+  const boundary = 'rp' + crypto.randomUUID(); const enc = new TextEncoder();
+  const meta = JSON.stringify({ name, parents: [parent], mimeType: 'application/vnd.google-apps.spreadsheet' });
+  const pre = enc.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n`);
+  const post = enc.encode(`\r\n--${boundary}--`);
+  const cb = enc.encode(csv);
+  const body = new Uint8Array(pre.length + cb.length + post.length);
+  body.set(pre, 0); body.set(cb, pre.length); body.set(post, pre.length + cb.length);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { ...H(token), 'Content-Type': `multipart/related; boundary=${boundary}` }, body });
+  const j = await res.json(); if (!j.id) throw new Error('No se pudo crear la hoja: ' + JSON.stringify(j)); return j.id;
+}
+async function updateSheet(token: string, id: string, csv: string) {
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&supportsAllDrives=true`, { method: 'PATCH', headers: { ...H(token), 'Content-Type': 'text/csv; charset=UTF-8' }, body: csv });
+  if (!res.ok) throw new Error('No se pudo actualizar la hoja: ' + res.status + ' ' + (await res.text()).slice(0, 200));
+}
+async function syncSheet(token: string, supa: any, viFolder: string) {
+  const [gRes, tRes, rRes, cRes] = await Promise.all([
+    supa.from('gastos').select('*').order('creado', { ascending: false }),
+    supa.from('tecnicos').select('id,nombre'),
+    supa.from('rendiciones').select('id,titulo'),
+    supa.from('configuracion').select('viaticos_sheet_id').eq('id', 1).single(),
+  ]);
+  const tecMap: Record<string, string> = {}; (tRes.data || []).forEach((t: any) => tecMap[t.id] = t.nombre);
+  const renMap: Record<string, string> = {}; (rRes.data || []).forEach((r: any) => renMap[r.id] = r.titulo);
+  const csv = buildCsv(gRes.data || [], tecMap, renMap);
+  let sid = cRes.data?.viaticos_sheet_id as string | null;
+  if (!sid) { sid = await createSheet(token, 'Registro de Viáticos', viFolder, csv); await supa.from('configuracion').update({ viaticos_sheet_id: sid }).eq('id', 1); }
+  else { await updateSheet(token, sid, csv); }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -96,13 +142,21 @@ Deno.serve(async (req) => {
     const ext = String(g.mime || '').includes('png') ? 'png' : String(g.mime || '').includes('pdf') ? 'pdf' : 'jpg';
     const fname = `${fecha}_${cat}_${prov}_${tot}.${ext}`;
 
-    // Si ya se subió antes (re-confirmación), solo renombra el archivo con los datos finales.
-    if (g.drive_file_id) { await renameFile(token, g.drive_file_id, fname); return json({ ok: true, drive_url: g.drive_url, renombrado: true }); }
-    const dl = await supa.storage.from('viaticos').download(g.imagen_path);
-    if (dl.error || !dl.data) return json({ error: 'No se pudo leer la imagen.' }, 500);
-    const bytes = new Uint8Array(await dl.data.arrayBuffer());
-    const up = await uploadFile(token, fname, g.mime || 'image/jpeg', bytes, renFolder);
-    await supa.from('gastos').update({ drive_url: up.url, drive_file_id: up.id }).eq('id', gasto_id);
-    return json({ ok: true, drive_url: up.url });
+    let finalUrl = g.drive_url as string | null;
+    if (g.drive_file_id) {
+      await renameFile(token, g.drive_file_id, fname);
+    } else {
+      const dl = await supa.storage.from('viaticos').download(g.imagen_path);
+      if (dl.error || !dl.data) return json({ error: 'No se pudo leer la imagen.' }, 500);
+      const bytes = new Uint8Array(await dl.data.arrayBuffer());
+      const up = await uploadFile(token, fname, g.mime || 'image/jpeg', bytes, renFolder);
+      await supa.from('gastos').update({ drive_url: up.url, drive_file_id: up.id }).eq('id', gasto_id);
+      finalUrl = up.url;
+    }
+
+    // Rearma la hoja "Registro de Viáticos" con todos los gastos (mejor esfuerzo).
+    try { await syncSheet(token, supa, viFolder); } catch (e) { console.error('sheet sync', String(e)); }
+
+    return json({ ok: true, drive_url: finalUrl });
   } catch (e) { return json({ error: String((e as any)?.message || e) }, 500); }
 });
