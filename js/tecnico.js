@@ -793,6 +793,8 @@
       return toast('No se pudo guardar', 'err');
     }
     toast('Gasto confirmado ✓', 'ok');
+    // Copia ordenada a Drive para administración (en segundo plano; no bloquea la app).
+    sb.functions.invoke('viatico-a-drive', { body: { tecnico_id: state.tecnico.id, gasto_id: g.id } }).catch(() => {});
     state.gastoReview = null; _viaticoPop(); openRendicion(state.rendicion, false);
   }
 
