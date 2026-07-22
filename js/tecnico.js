@@ -25,7 +25,7 @@
   const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const slugUp = (s) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '').slice(0, 22);
 
-  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '', rendicion: null, gastoReview: null };
+  const state = { tecnico: null, accent: '#006eb1', stack: [], nodos: [], currentNodo: null, pin: '', captured: [], stream: null, tab: 'arbol', subFilter: 'all', subQuery: '', rendicion: null, gastoReview: null, videoRec: null, videoChunks: [], videoAbort: false };
 
   // History API — enables iOS back-swipe gesture in standalone PWA mode.
   let _histDepth = 0; // number of history entries we've pushed
@@ -118,22 +118,38 @@
   }
   const childrenOf = (pid) => state.nodos.filter((n) => n.parent_id === pid).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
   const rutaActual = () => state.stack.map((n) => n.nombre).join(' › ');
-  const colegioActual = () => state.stack[1] || state.stack[0] || null;
+  // El "colegio" es el ancestro más profundo con datos de ubicación cargados (no una
+  // posición fija en la ruta): árboles como PEIP tienen un nivel extra (Proyecto) entre
+  // la raíz y el colegio, así que la profundidad varía según la rama.
+  const colegioActual = () => {
+    for (let i = state.stack.length - 1; i >= 0; i--) {
+      const n = state.stack[i];
+      if (n && (n.direccion || n.distrito)) return n;
+    }
+    return state.stack[state.stack.length - 1] || null;
+  };
   // Ubicación leída desde la BD (nodo del colegio). null si aún no está cargada.
   function locActual() {
     const c = colegioActual();
-    return c && c.direccion ? { direccion: c.direccion, distrito: c.distrito, provincia: c.provincia, region: c.region } : null;
+    return c && (c.direccion || c.distrito) ? { direccion: c.direccion, distrito: c.distrito, provincia: c.provincia, region: c.region } : null;
   }
 
   function setBar(title, sub, back) { $('#tbar-title').textContent = title; $('#tbar-sub').textContent = sub || ''; $('#btn-back').classList.toggle('hidden', !back); }
 
-  // El "punto de decisión": un nodo cuyos hijos son exactamente
-  // «1. REGISTRO FOTOGRÁFICO» (con máscara, por grupos) + «2. SUBIDA DOCUMENTOS» (libre).
+  // El "punto de decisión": un nodo con un contenedor «…REGISTRO…» (con máscara, por
+  // grupos) y 1-2 hojas de subida directa: documentos libres y/o video (distinguidos
+  // por la columna `captura`, no por el nombre — así el nombre puede variar, ej. PEIP
+  // usa "REGISTRO POSTVENTA" / "VIDEO POSTVENTA" en vez de los nombres de Talleres).
   function decisionPoint(items) {
-    if (items.length !== 2) return null;
+    if (items.length < 2 || items.length > 3) return null;
     const reg = items.find((n) => n.tipo === 'contenedor' && /REGISTRO/i.test(n.nombre));
-    const doc = items.find((n) => n.tipo === 'subida' && /(DOCUMENTOS|SUBIDA)/i.test(n.nombre));
-    return reg && doc ? { reg, doc } : null;
+    if (!reg) return null;
+    const rest = items.filter((n) => n !== reg);
+    if (!rest.every((n) => n.tipo === 'subida')) return null;
+    const video = rest.find((n) => n.captura === 'video');
+    const doc = rest.find((n) => n.captura !== 'video');
+    if (rest.length !== [doc, video].filter(Boolean).length) return null;
+    return (doc || video) ? { reg, doc, video } : null;
   }
   function breadcrumb() {
     const cb = el('div', { class: 'crumb-bar' });
@@ -171,7 +187,7 @@
     const items = childrenOf(parent ? parent.id : null);
     // ¿Llegamos a un colegio/taller? → pantalla «¿Qué registrarás?»
     const dec = parent && decisionPoint(items);
-    if (dec) return renderChoice(parent, dec.reg, dec.doc);
+    if (dec) return renderChoice(parent, dec);
     setBar(parent ? parent.nombre : 'Proyectos', parent ? rutaActual() : `Hola, ${state.tecnico.nombre}`, state.stack.length > 0);
     const screen = $('#screen'); screen.innerHTML = '';
     if (parent) screen.appendChild(breadcrumb());
@@ -185,9 +201,11 @@
       const card = el('div', { class: 'node-card' + (isSub ? ' group' : '') });
       if (isSub) {
         card.dataset.nid = n.id;
-        card.innerHTML = `<div class="nic sub">📷</div>
+        const icono = n.captura === 'video' ? '🎥' : '📷';
+        const metaInicial = n.con_mascara ? 'Cargando…' : n.captura === 'video' ? '🎥 Video corto' : '📄 Subida libre';
+        card.innerHTML = `<div class="nic sub">${icono}</div>
           <div class="nbody"><div class="nname">${esc(n.nombre)}</div>
-          <div class="nmeta" data-meta>${n.con_mascara ? 'Cargando…' : '📄 Subida libre'}</div></div>
+          <div class="nmeta" data-meta>${metaInicial}</div></div>
           <div class="gstat" data-gstat></div>`;
       } else {
         card.innerHTML = `<div class="nic cont">📁</div><div class="nbody"><div class="nname">${esc(n.nombre)}</div><div class="nmeta">${childrenOf(n.id).length} carpeta(s)</div></div><div class="chev">›</div>`;
@@ -199,8 +217,8 @@
     decorateGroups();
   }
 
-  // Pantalla «¿Qué registrarás?» — registro fotográfico (con máscara) vs documentos (libre)
-  function renderChoice(parent, reg, doc) {
+  // Pantalla «¿Qué registrarás?» — registro fotográfico (con máscara) + documentos y/o video (libres)
+  function renderChoice(parent, { reg, doc, video }) {
     state.currentNodo = null; stopCamera();
     setBar(parent.nombre, rutaActual(), true);
     const screen = $('#screen'); screen.innerHTML = '';
@@ -209,21 +227,34 @@
     const wrap = el('div', { class: 'choice' });
     const cReg = el('button', { class: 'choice-card reg' });
     cReg.innerHTML = `<div class="cc-ic reg">📷</div>
-      <div class="cc-body"><div class="cc-t">Registro fotográfico</div>
+      <div class="cc-body"><div class="cc-t">${esc(reg.nombre)}</div>
       <div class="cc-d">Fotos con máscara, organizadas por grupos</div>
       <div class="cc-tags"><span class="cc-tag">📍 Con ubicación</span><span class="cc-tag">🗂 ${childrenOf(reg.id).length} grupos</span></div></div>
       <div class="cc-go">→</div>`;
     cReg.addEventListener('click', () => { state.stack.push(reg); _pushHistory(); renderTree(); });
-    const cDoc = el('button', { class: 'choice-card doc' });
-    cDoc.innerHTML = `<div class="cc-ic doc">📄</div>
-      <div class="cc-body"><div class="cc-t">Documentos</div>
-      <div class="cc-d">Cámara limpia, sin máscara</div>
-      <div class="cc-tags"><span class="cc-tag">📎 Subida libre</span></div></div>
-      <div class="cc-go">→</div>`;
-    cDoc.addEventListener('click', () => openFolder(doc));
-    wrap.appendChild(cReg); wrap.appendChild(cDoc);
+    wrap.appendChild(cReg);
+    if (doc) {
+      const cDoc = el('button', { class: 'choice-card doc' });
+      cDoc.innerHTML = `<div class="cc-ic doc">📄</div>
+        <div class="cc-body"><div class="cc-t">${esc(doc.nombre)}</div>
+        <div class="cc-d">Cámara limpia, sin máscara</div>
+        <div class="cc-tags"><span class="cc-tag">📎 Subida libre</span></div></div>
+        <div class="cc-go">→</div>`;
+      cDoc.addEventListener('click', () => openFolder(doc));
+      wrap.appendChild(cDoc);
+    }
+    if (video) {
+      const cVideo = el('button', { class: 'choice-card video' });
+      cVideo.innerHTML = `<div class="cc-ic video">🎥</div>
+        <div class="cc-body"><div class="cc-t">${esc(video.nombre)}</div>
+        <div class="cc-d">Video corto (máx. ${VIDEO_MAX_SEC}s), sin máscara</div>
+        <div class="cc-tags"><span class="cc-tag">🎬 Subida directa</span></div></div>
+        <div class="cc-go">→</div>`;
+      cVideo.addEventListener('click', () => openFolder(video));
+      wrap.appendChild(cVideo);
+    }
     screen.appendChild(wrap);
-    decorateChoice(reg, doc);
+    decorateChoice(reg, doc, video);
   }
 
   // Rellena los contadores de fotos de cada grupo (lista) leyendo la cola local.
@@ -246,13 +277,14 @@
     });
   }
   // Contadores en las dos tarjetas de la pantalla de elección.
-  async function decorateChoice(reg, doc) {
+  async function decorateChoice(reg, doc, video) {
     const all = await idbAll();
     const ids = new Set(childrenOf(reg.id).map((n) => String(n.id)));
     const nReg = all.filter((r) => ids.has(String(r.nodo_id))).length;
-    const nDoc = all.filter((r) => String(r.nodo_id) === String(doc.id)).length;
     const tag = (card, n) => { const t = $('#screen').querySelector(card + ' .cc-count'); if (t) return; const body = $('#screen').querySelector(card + ' .cc-tags'); if (body && n) body.insertAdjacentHTML('beforeend', `<span class="cc-tag cc-count ok">✓ ${n} en cola/subidas</span>`); };
-    tag('.choice-card.reg', nReg); tag('.choice-card.doc', nDoc);
+    tag('.choice-card.reg', nReg);
+    if (doc) tag('.choice-card.doc', all.filter((r) => String(r.nodo_id) === String(doc.id)).length);
+    if (video) tag('.choice-card.video', all.filter((r) => String(r.nodo_id) === String(video.id)).length);
   }
 
   // ============================================================
@@ -348,12 +380,14 @@
     const bar = el('div', { class: 'capture-bar' });
     const driveBtn = el('button', { class: 'btn btn-secondary', title: 'Abrir en Drive' }, '🔗');
     driveBtn.addEventListener('click', () => nodo.drive_url ? window.open(nodo.drive_url, '_blank') : toast('Carpeta de Drive aún no creada', 'err'));
-    const camBtn = el('button', { class: 'btn btn-primary' }, '📸 Tomar fotos');
-    camBtn.addEventListener('click', () => openCamera(nodo));
+    const esVideo = nodo.captura === 'video';
+    const camBtn = el('button', { class: 'btn btn-primary' }, esVideo ? '🎥 Grabar video' : '📸 Tomar fotos');
+    camBtn.addEventListener('click', () => esVideo ? openVideoCam(nodo) : openCamera(nodo));
     bar.appendChild(driveBtn); bar.appendChild(camBtn); screen.appendChild(bar);
     await renderFolder();
   }
   async function renderFolder() {
+    const esVideo = state.currentNodo.captura === 'video';
     const all = (await idbAll()).filter((s) => s.nodo_id === state.currentNodo.id).sort((a, b) => b.id - a.id);
     const cnt = { done: 0, uploading: 0, pending: 0, error: 0 }; all.forEach((s) => cnt[s.status]++);
     const chips = $('#chips'); if (chips) chips.innerHTML =
@@ -362,12 +396,18 @@
       (cnt.pending ? `<span class="chip pend">☁ ${cnt.pending} en cola</span>` : '') +
       (cnt.error ? `<span class="chip err">! ${cnt.error} error</span>` : '');
     const fl = $('#filelist'); if (!fl) return; fl.innerHTML = '';
-    if (all.length === 0) { fl.appendChild(el('div', { class: 'empty', style: 'padding:40px 20px' }, '<div class="ic">📸</div><p>Aún no hay fotos.<br>Toca “Tomar fotos” para empezar.</p>')); return; }
+    if (all.length === 0) {
+      fl.appendChild(el('div', { class: 'empty', style: 'padding:40px 20px' },
+        esVideo ? '<div class="ic">🎥</div><p>Aún no hay videos.<br>Toca “Grabar video” para empezar.</p>'
+                : '<div class="ic">📸</div><p>Aún no hay fotos.<br>Toca “Tomar fotos” para empezar.</p>'));
+      return;
+    }
     const lbl = { pending: 'En cola', uploading: 'Subiendo…', done: 'Subida', error: 'Error de subida' };
     all.forEach((s) => {
       const row = el('div', { class: 'frow' });
       const hora = new Date(s.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-      row.innerHTML = `<img class="fthumb" src="${s.thumb}">
+      const thumbHtml = s.thumb ? `<img class="fthumb" src="${s.thumb}">` : `<div class="fthumb vid">🎬</div>`;
+      row.innerHTML = `${thumbHtml}
         <div class="fbody"><div class="fname">${esc(s.filename)}</div>
         <div class="fmeta st-${s.status}">${s.status === 'uploading' ? `<div class="fbar"><i></i></div>` : `${lbl[s.status]} · ${hora}`}</div></div>
         <div class="fstat ${s.status}">${s.status === 'done' ? '✓' : s.status === 'error' ? '!' : s.status === 'uploading' ? '↻' : '☁'}</div>`;
@@ -420,7 +460,11 @@
       $('#cam-video').srcObject = state.stream;
     } catch (e) { toast('No se pudo abrir la cámara. Revisa permisos.', 'err'); }
   }
-  function stopCamera() { if (state.stream) { state.stream.getTracks().forEach((t) => t.stop()); state.stream = null; } }
+  function stopCamera() {
+    if (state.videoRec && state.videoRec.state === 'recording') { state.videoAbort = true; try { state.videoRec.stop(); } catch (_) { /* ya detenido */ } }
+    state.videoRec = null;
+    if (state.stream) { state.stream.getTracks().forEach((t) => t.stop()); state.stream = null; }
+  }
 
   function takeShot() {
     const v = $('#cam-video'); if (!v || !v.videoWidth) return;
@@ -557,15 +601,101 @@
   }
 
   // ============================================================
+  // VIDEO CORTO · sin máscara, subida directa (ej. PEIP "VIDEO POSTVENTA")
+  // ============================================================
+  const VIDEO_MAX_SEC = 20;
+  const VIDEO_BITRATE = 1500000;   // ~1.5 Mbps de video
+  const VIDEO_AUDIO_BITRATE = 64000;
+  function pickVideoMime() {
+    const candidatos = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    for (const c of candidatos) { if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c; }
+    return '';
+  }
+  async function openVideoCam(nodo) {
+    _pushHistory();
+    state.videoRec = null; state.videoChunks = []; setNav(false);
+    setBar(nodo.nombre, 'Video', true);
+    const screen = $('#screen'); screen.innerHTML = '';
+    const cam = el('div', { class: 'cam vcam' });
+    cam.innerHTML = `
+      <video id="vid-preview" autoplay playsinline muted></video>
+      <div class="vid-timer hidden" id="vid-timer">00:00</div>
+      <div class="vcam-bar">
+        <button class="vrecord" id="vrecord" title="Grabar"><span class="vrec-dot"></span></button>
+      </div>`;
+    screen.appendChild(cam);
+    const btn = $('#vrecord'); const timerEl = $('#vid-timer');
+    let timerInt = null, autoStopT = null, segs = 0;
+    const stopTimer = () => { clearInterval(timerInt); clearTimeout(autoStopT); timerInt = null; autoStopT = null; };
+    const startRec = () => {
+      const mime = pickVideoMime();
+      if (!mime) { toast('Este navegador no puede grabar video.', 'err'); return; }
+      state.videoChunks = [];
+      const rec = new MediaRecorder(state.stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE, audioBitsPerSecond: VIDEO_AUDIO_BITRATE });
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) state.videoChunks.push(e.data); };
+      rec.onstop = () => {
+        stopTimer();
+        if (state.videoAbort) { state.videoAbort = false; return; } // se salió de la pantalla a mitad de grabación
+        const blob = new Blob(state.videoChunks, { type: rec.mimeType || 'video/webm' });
+        openVideoReview(nodo, blob);
+      };
+      state.videoRec = rec; rec.start();
+      btn.classList.add('rec'); timerEl.classList.remove('hidden');
+      segs = 0; timerEl.textContent = '00:00';
+      navigator.vibrate && navigator.vibrate(40);
+      timerInt = setInterval(() => { segs++; const m = String(Math.floor(segs / 60)).padStart(2, '0'); const s = String(segs % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; }, 1000);
+      autoStopT = setTimeout(() => { if (state.videoRec && state.videoRec.state === 'recording') state.videoRec.stop(); }, VIDEO_MAX_SEC * 1000);
+    };
+    const stopRec = () => { if (state.videoRec && state.videoRec.state === 'recording') { state.videoRec.stop(); navigator.vibrate && navigator.vibrate(60); } };
+    btn.addEventListener('click', () => { if (state.videoRec && state.videoRec.state === 'recording') stopRec(); else startRec(); });
+    try {
+      const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true };
+      state.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      $('#vid-preview').srcObject = state.stream;
+    } catch (e) { toast('No se pudo abrir la cámara/micrófono. Revisa permisos.', 'err'); }
+  }
+  function openVideoReview(nodo, blob) {
+    stopCamera(); setNav(false);
+    setBar('Revisar video', nodo.nombre, true);
+    const screen = $('#screen'); screen.innerHTML = '';
+    const url = URL.createObjectURL(blob);
+    const wrap = el('div', { class: 'vreview' });
+    wrap.innerHTML = `<video src="${url}" controls playsinline class="vreview-player"></video>`;
+    screen.appendChild(wrap);
+    const bar = el('div', { class: 'capture-bar' });
+    const discard = el('button', { class: 'btn btn-secondary', style: 'flex:0 0 auto;color:#c20512' }, 'Descartar');
+    discard.addEventListener('click', () => { URL.revokeObjectURL(url); openVideoCam(nodo); });
+    const up = el('button', { class: 'btn btn-primary' }, '⬆ Subir video');
+    up.addEventListener('click', () => { up.disabled = true; enqueueVideo(nodo, blob); });
+    bar.appendChild(discard); bar.appendChild(up); screen.appendChild(bar);
+  }
+  async function enqueueVideo(nodo, blob) {
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    const base = (await idbAll()).filter((s) => s.nodo_id === nodo.id).length;
+    state.currentNodo = nodo; // nomenclatura() lee currentNodo + state.stack
+    const filename = nomenclatura(base + 1, ext);
+    const loc = locActual();
+    const b64 = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result.split(',')[1]); rd.readAsDataURL(blob); });
+    await idbAdd({
+      tecnico_id: state.tecnico.id, nodo_id: nodo.id, filename,
+      base64: b64, thumb: null, mime: blob.type || 'video/webm',
+      direccion: loc ? `${loc.direccion}, ${loc.distrito}, ${loc.provincia}` : ((colegioActual() || {}).nombre || null),
+      fecha: new Date().toISOString(), status: 'pending',
+    });
+    updateBadge(); flushQueue();
+    openConfirm(1, [filename], 'video(s)', () => openVideoCam(nodo), '🎥 Grabar más');
+  }
+
+  // ============================================================
   // SUBIDA EN LOTE + NOMENCLATURA + CONFIRMACIÓN
   // ============================================================
-  function nomenclatura(seq) {
+  function nomenclatura(seq, ext = 'jpg') {
     const segs = state.stack.filter((n) => !/^\s*1\.\s*REGISTRO|^\s*2\.\s*SUBIDA/i.test(n.nombre)).map((n) => slugUp(n.nombre));
     segs.push(slugUp(state.currentNodo.nombre));
     const d = new Date();
     const p = (x) => String(x).padStart(2, '0');
     const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-    return `${segs.join('_')}_${stamp}_${p(seq)}.jpg`;
+    return `${segs.join('_')}_${stamp}_${p(seq)}.${ext}`;
   }
   async function downscale(dataUrl, max = 240, q = 0.7) {
     return new Promise((res) => { const i = new Image(); i.onload = () => { const sc = Math.min(1, max / Math.max(i.width, i.height)); const c = $('#canvas'); c.width = Math.round(i.width * sc); c.height = Math.round(i.height * sc); c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; i.src = dataUrl; });
@@ -586,21 +716,21 @@
       });
     }
     updateBadge(); flushQueue();
-    openConfirm(fotos.length, nombres);
+    openConfirm(fotos.length, nombres, 'foto(s)', () => openCamera(state.currentNodo), '📸 Tomar más');
   }
-  function openConfirm(n, nombres) {
+  function openConfirm(n, nombres, unidad = 'foto(s)', onMas = () => openCamera(state.currentNodo), lblMas = '📸 Tomar más') {
     setNav(false);
     setBar('¡Listo!', state.currentNodo.nombre, true);
     const screen = $('#screen'); screen.innerHTML = '';
     const c = el('div', { class: 'confirm' });
     c.innerHTML = `<div class="confirm-ic">✓</div>
       <div class="confirm-t">¡Listo!</div>
-      <div class="confirm-s">${n} foto(s) en cola para<br>${esc(state.currentNodo.nombre)}</div>
+      <div class="confirm-s">${n} ${unidad} en cola para<br>${esc(state.currentNodo.nombre)}</div>
       <div class="nomen"><div class="nomen-l">NOMENCLATURA GENERADA</div><div class="nomen-v">${esc(nombres[0] || '')}</div></div>`;
     screen.appendChild(c);
     const bar = el('div', { class: 'capture-bar' });
     const volver = el('button', { class: 'btn btn-secondary', onclick: () => openFolder(state.currentNodo) }, 'Ver carpeta');
-    const mas = el('button', { class: 'btn btn-primary', onclick: () => openCamera(state.currentNodo) }, '📸 Tomar más');
+    const mas = el('button', { class: 'btn btn-primary', onclick: onMas }, lblMas);
     bar.appendChild(volver); bar.appendChild(mas); screen.appendChild(bar);
   }
 
