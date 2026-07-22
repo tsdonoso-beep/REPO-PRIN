@@ -112,7 +112,7 @@
   // ÁRBOL
   // ============================================================
   async function loadNodos() {
-    const { data } = await sb.from('nodos').select('id,parent_id,nombre,tipo,con_mascara,drive_url,orden,region,provincia,distrito,direccion').order('orden', { ascending: true });
+    const { data } = await sb.from('nodos').select('id,parent_id,nombre,tipo,con_mascara,captura,drive_url,orden,region,provincia,distrito,direccion').order('orden', { ascending: true });
     if (data) { state.nodos = data; localStorage.setItem('repo_nodos', JSON.stringify(data)); }
     else { const c = localStorage.getItem('repo_nodos'); if (c) state.nodos = JSON.parse(c); }
   }
