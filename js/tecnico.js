@@ -635,18 +635,25 @@
     let timerInt = null, autoStopT = null, segs = 0;
     const stopTimer = () => { clearInterval(timerInt); clearTimeout(autoStopT); timerInt = null; autoStopT = null; };
     const startRec = () => {
+      if (!state.stream || !state.stream.active) { toast('La cámara aún no está lista. Espera un segundo e inténtalo de nuevo.', 'err'); return; }
       const mime = pickVideoMime();
       if (!mime) { toast('Este navegador no puede grabar video.', 'err'); return; }
       state.videoChunks = [];
-      const rec = new MediaRecorder(state.stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE, audioBitsPerSecond: VIDEO_AUDIO_BITRATE });
+      let rec;
+      try {
+        rec = new MediaRecorder(state.stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE, audioBitsPerSecond: VIDEO_AUDIO_BITRATE });
+      } catch (e) { toast('No se pudo iniciar la grabación: ' + (e.message || e), 'err'); return; }
       rec.ondataavailable = (e) => { if (e.data && e.data.size) state.videoChunks.push(e.data); };
+      rec.onerror = (e) => { toast('Error durante la grabación. Inténtalo de nuevo.', 'err'); stopTimer(); btn.classList.remove('rec'); timerEl.classList.add('hidden'); };
       rec.onstop = () => {
         stopTimer();
         if (state.videoAbort) { state.videoAbort = false; return; } // se salió de la pantalla a mitad de grabación
+        if (!state.videoChunks.length) { toast('No se grabó nada. Inténtalo de nuevo.', 'err'); return; }
         const blob = new Blob(state.videoChunks, { type: rec.mimeType || 'video/webm' });
         openVideoReview(nodo, blob);
       };
-      state.videoRec = rec; rec.start();
+      try { rec.start(); } catch (e) { toast('No se pudo iniciar la grabación: ' + (e.message || e), 'err'); return; }
+      state.videoRec = rec;
       btn.classList.add('rec'); timerEl.classList.remove('hidden');
       segs = 0; timerEl.textContent = '00:00';
       navigator.vibrate && navigator.vibrate(40);
