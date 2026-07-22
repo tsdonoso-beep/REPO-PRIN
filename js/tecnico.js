@@ -142,7 +142,11 @@
   // usa "REGISTRO POSTVENTA" / "VIDEO POSTVENTA" en vez de los nombres de Talleres).
   function decisionPoint(items) {
     if (items.length < 2 || items.length > 3) return null;
-    const reg = items.find((n) => n.tipo === 'contenedor' && /REGISTRO/i.test(n.nombre));
+    // «Registro» puede ser un contenedor con grupos (Talleres, ej. 1.1 Transporte, 1.2
+    // Adecuación…) o una hoja de captura directa con máscara (PEIP: proyectos ya
+    // ejecutados en postventa, sin fases que agrupar). Se distingue por con_mascara,
+    // no por el tipo de nodo.
+    const reg = items.find((n) => /REGISTRO/i.test(n.nombre) && n.con_mascara && (n.tipo === 'contenedor' || n.tipo === 'subida'));
     if (!reg) return null;
     const rest = items.filter((n) => n !== reg);
     if (!rest.every((n) => n.tipo === 'subida')) return null;
@@ -225,13 +229,14 @@
     screen.appendChild(breadcrumb());
     screen.appendChild(el('div', { class: 'choice-head' }, '<div class="ch-q">¿Qué registrarás?</div><div class="ch-sub">Elige el tipo de registro para esta ubicación</div>'));
     const wrap = el('div', { class: 'choice' });
+    const regDirecto = reg.tipo === 'subida'; // PEIP: captura directa, sin grupos por fase
     const cReg = el('button', { class: 'choice-card reg' });
     cReg.innerHTML = `<div class="cc-ic reg">📷</div>
       <div class="cc-body"><div class="cc-t">${esc(reg.nombre)}</div>
-      <div class="cc-d">Fotos con máscara, organizadas por grupos</div>
-      <div class="cc-tags"><span class="cc-tag">📍 Con ubicación</span><span class="cc-tag">🗂 ${childrenOf(reg.id).length} grupos</span></div></div>
+      <div class="cc-d">${regDirecto ? 'Fotos con máscara, subida directa' : 'Fotos con máscara, organizadas por grupos'}</div>
+      <div class="cc-tags"><span class="cc-tag">📍 Con ubicación</span>${regDirecto ? '' : `<span class="cc-tag">🗂 ${childrenOf(reg.id).length} grupos</span>`}</div></div>
       <div class="cc-go">→</div>`;
-    cReg.addEventListener('click', () => { state.stack.push(reg); _pushHistory(); renderTree(); });
+    cReg.addEventListener('click', () => { if (regDirecto) openFolder(reg); else { state.stack.push(reg); _pushHistory(); renderTree(); } });
     wrap.appendChild(cReg);
     if (doc) {
       const cDoc = el('button', { class: 'choice-card doc' });
@@ -279,8 +284,10 @@
   // Contadores en las dos tarjetas de la pantalla de elección.
   async function decorateChoice(reg, doc, video) {
     const all = await idbAll();
-    const ids = new Set(childrenOf(reg.id).map((n) => String(n.id)));
-    const nReg = all.filter((r) => ids.has(String(r.nodo_id))).length;
+    // Con grupos (Talleres): cuenta lo subido en cualquiera de sus hijos.
+    // Directo (PEIP): cuenta lo subido en el propio nodo.
+    const idsReg = reg.tipo === 'contenedor' ? new Set(childrenOf(reg.id).map((n) => String(n.id))) : new Set([String(reg.id)]);
+    const nReg = all.filter((r) => idsReg.has(String(r.nodo_id))).length;
     const tag = (card, n) => { const t = $('#screen').querySelector(card + ' .cc-count'); if (t) return; const body = $('#screen').querySelector(card + ' .cc-tags'); if (body && n) body.insertAdjacentHTML('beforeend', `<span class="cc-tag cc-count ok">✓ ${n} en cola/subidas</span>`); };
     tag('.choice-card.reg', nReg);
     if (doc) tag('.choice-card.doc', all.filter((r) => String(r.nodo_id) === String(doc.id)).length);
