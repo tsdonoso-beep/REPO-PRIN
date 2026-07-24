@@ -689,7 +689,10 @@
     state.currentNodo = nodo; // nomenclatura() lee currentNodo + state.stack
     const filename = nomenclatura(base + 1, ext);
     const loc = locActual();
-    const b64 = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result.split(',')[1]); rd.readAsDataURL(blob); });
+    // El mime de video trae codecs con coma (p. ej. "video/webm;codecs=vp8,opus"),
+    // así que el data URL contiene comas antes del base64. Tomamos todo lo que va
+    // después de la PRIMERA coma; split(',')[1] partiría el base64 y rompería atob() en el server.
+    const b64 = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => { const s = String(rd.result); res(s.slice(s.indexOf(',') + 1)); }; rd.readAsDataURL(blob); });
     await idbAdd({
       tecnico_id: state.tecnico.id, nodo_id: nodo.id, filename,
       base64: b64, thumb: null, mime: blob.type || 'video/webm',
