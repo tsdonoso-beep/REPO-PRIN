@@ -345,7 +345,18 @@
           <div class="fmeta st-${s.status}">${s.status === 'uploading' ? '<div class="fbar"><i></i></div>' : `${lbl[s.status]} · ${hora}`}</div>
         </div>
         <div class="fstat ${s.status}">${s.status === 'done' ? '✓' : s.status === 'error' ? '!' : s.status === 'uploading' ? '↻' : '☁'}</div>`;
-      if (s.status === 'error') { row.style.cursor = 'pointer'; row.addEventListener('click', () => { toast('Reintentando subida…'); flushQueue(); }); }
+      if (s.status === 'error') {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', () => { toast('Reintentando subida…'); flushQueue(); });
+        const del = el('button', { class: 'frow-del', title: 'Descartar', style: 'flex:0 0 auto;margin-left:6px;background:none;border:none;color:#c20512;font-size:20px;line-height:1;padding:6px;cursor:pointer' }, '✕');
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          if (confirm('¿Descartar este archivo de la cola? No se subirá y se borrará de este dispositivo.')) {
+            idbDel(s.id).then(() => { updateBadge(); paintSubList(); });
+          }
+        });
+        row.appendChild(del);
+      }
       cont.appendChild(row);
     });
   }
